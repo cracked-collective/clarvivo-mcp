@@ -1,0 +1,31 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
+  "name": "io.github.cracked-collective/clarvivo-mcp",
+  "description": "Install Clarvivo analytics from your coding agent, then query compact traffic stats.",
+  "repository": {
+    "url": "https://github.com/cracked-collective/clarvivo-mcp",
+    "source": "github"
+  },
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@clarvivo/mcp",
+      "version": "0.1.0",
+      "transport": { "type": "stdio" },
+      "environmentVariables": [
+        {
+          "name": "CLARVIVO_API_TOKEN",
+          "description": "Clarvivo API token from app.clarvivo.com/dashboard/settings?tab=api-tokens",
+          "isRequired": true,
+          "isSecret": true
+        },
+        {
+          "name": "CLARVIVO_BASE_URL",
+          "description": "Override the Clarvivo API base URL (self-hosting or local development).",
+          "isRequired": false
+        }
+      ]
+    }
+  ]
+}

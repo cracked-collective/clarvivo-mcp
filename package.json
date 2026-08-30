@@ -1,0 +1,45 @@
+{
+  "name": "@clarvivo/mcp",
+  "version": "0.1.0",
+  "description": "Install Clarvivo analytics from your coding agent, then query compact traffic stats.",
+  "type": "module",
+  "bin": {
+    "clarvivo-mcp": "dist/index.js"
+  },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "prepack": "npm run build",
+    "test": "vitest run"
+  },
+  "keywords": [
+    "clarvivo",
+    "analytics",
+    "mcp",
+    "model-context-protocol"
+  ],
+  "homepage": "https://app.clarvivo.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cracked-collective/clarvivo-mcp.git"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^22.18.0",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  },
+  "mcpName": "io.github.cracked-collective/clarvivo-mcp"
+}
