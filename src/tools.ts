@@ -1,6 +1,7 @@
 import path from "node:path";
 import {
   type AnalyticsRow,
+  ClarvivoApiError,
   type ClarvivoApi,
   HttpClarvivoApi,
   isAnalyticsLockout,
@@ -15,6 +16,12 @@ import {
   normalizeFramework,
   type FrameworkId,
 } from "./frameworks.js";
+import {
+  detectRevenueProvider,
+  normalizeProvider,
+  revenueChecklist,
+  signedRevenueSnippet,
+} from "./payments.js";
 
 export interface ToolContext {
   env?: NodeJS.ProcessEnv;
@@ -31,12 +38,53 @@ function success(data: Record<string, unknown>): ToolSuccess {
 }
 
 function failure(error: unknown, env: NodeJS.ProcessEnv, mode?: "project-limit" | "analytics-lockout"): ToolFailure {
-  const message = mode === "project-limit" && isPlanLimit(error)
+  const message = error instanceof ClarvivoApiError && error.code === "TOKEN_SCOPE_REQUIRED"
+    ? `This tool needs the ${error.scope || "required"} scope. Open ${(env.CLARVIVO_BASE_URL || "https://app.clarvivo.com").replace(/\/$/, "")}/dashboard/settings?tab=api-tokens, add ${error.scope || "that scope"} to this API token (or create a token with it), then restart the MCP client and retry.`
+    : mode === "project-limit" && isPlanLimit(error)
     ? planLimitMessage(env.CLARVIVO_BASE_URL)
     : mode === "analytics-lockout" && isAnalyticsLockout(error)
       ? payToReadMessage(env.CLARVIVO_BASE_URL)
       : error instanceof Error ? error.message : "Clarvivo request failed.";
   return { content: [{ type: "text", text: message }], isError: true };
+}
+
+function projectApiKey(projects: Awaited<ReturnType<ClarvivoApi["listProjects"]>>, projectId: number | string): string {
+  const project = projects.find((candidate) => String(candidate.id) === String(projectId));
+  if (!project) throw new Error(`Project ${projectId} was not found.`);
+  return project.apiKey;
+}
+
+function relativeTime(value: string | null, now = Date.now()): string {
+  if (!value) return "never";
+  const elapsed = Math.max(0, now - new Date(value).getTime());
+  if (!Number.isFinite(elapsed)) return value;
+  const seconds = Math.round(elapsed / 1000);
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 48) return `${hours}h ago`;
+  return `${Math.round(hours / 24)}d ago`;
+}
+
+function knownPagePaths(rows: AnalyticsRow[]): Set<string> {
+  const paths = new Set<string>();
+  for (const row of rows) {
+    for (const item of [...array(row.topPages), ...array(row.pageDetails)]) {
+      const value = item.path ?? item.page ?? item.url;
+      if (typeof value === "string") paths.add(normalizePath(value));
+    }
+  }
+  return paths;
+}
+
+function normalizePath(value: string): string {
+  try {
+    const parsed = new URL(value, "https://clarvivo.local");
+    return parsed.pathname.replace(/\/$/, "") || "/";
+  } catch {
+    return value.trim().replace(/\/$/, "") || "/";
+  }
 }
 
 function canonicalDomain(input: string): string {
@@ -215,10 +263,129 @@ export function createToolHandlers(context: ToolContext = {}) {
       try {
         const api = resolveApi(context);
         const days = Math.max(1, Math.min(90, Math.round(input.days ?? 7)));
-        const [rows, realtime] = await Promise.all([api.getAnalytics(input.projectId, days), api.getRealtime(input.projectId)]);
-        return success({ projectId: input.projectId, ...summarizeStats(rows, number(realtime.count), days) });
+        const [rows, realtime, revenue] = await Promise.all([
+          api.getAnalytics(input.projectId, days),
+          api.getRealtime(input.projectId),
+          api.getRevenue(input.projectId),
+        ]);
+        return success({
+          projectId: input.projectId,
+          ...summarizeStats(rows, number(realtime.count), days),
+          revenue: {
+            total: number(revenue.totalRevenue),
+            events: number(revenue.eventCount),
+            average: number(revenue.averageAmount),
+          },
+        });
       } catch (error) {
         return failure(error, env, "analytics-lockout");
+      }
+    },
+
+    connectRevenue: async (input: { projectId: number | string; provider?: string; [key: string]: unknown }): Promise<ToolResult> => {
+      try {
+        const api = resolveApi(context);
+        const detected = input.provider ? undefined : detectRevenueProvider(cwd);
+        const provider = input.provider ? normalizeProvider(input.provider) : detected?.provider;
+        if (!provider || provider === "custom") {
+          const apiKey = projectApiKey(await api.listProjects(), input.projectId);
+          return success({
+            projectId: input.projectId,
+            provider: "custom",
+            message: "No supported payment SDK was detected. Copy the ingest signing secret from Clarvivo Dashboard → Settings → Integrations into the server-only CLARVIVO_INGEST_SECRET environment variable, then use this signed revenue POST. Never run it in the browser or paste the secret into a tool call.",
+            snippet: signedRevenueSnippet(apiKey, baseUrl(context)),
+            attribution: "Pass clv_vid from browser localStorage to this server-side code as visitor_id. That is what makes revenue-by-channel work.",
+          });
+        }
+        const connection = await api.connectRevenue(input.projectId, provider);
+        const checklist = revenueChecklist(provider, connection.webhookUrl, cwd);
+        return success({
+          projectId: input.projectId,
+          provider,
+          detectedFrom: detected?.packageName,
+          connected: true,
+          secretConfigured: connection.secretConfigured,
+          checklist,
+          numberedChecklist: checklist.map((item, index) => `${index + 1}. ${item}`).join("\n\n"),
+        });
+      } catch (error) {
+        return failure(error, env);
+      }
+    },
+
+    verifyRevenue: async (input: { projectId: number | string }): Promise<ToolResult> => {
+      try {
+        const status = await resolveApi(context).getRevenueStatus(input.projectId);
+        const share = status.attributedShare == null ? 0 : Math.round(status.attributedShare * 100);
+        const provider = status.lastSource || Object.entries(status.connected).find(([, connected]) => connected)?.[0] || "revenue";
+        const summary = `${status.eventsReceived.toLocaleString("en-US")} events from ${provider}, last ${relativeTime(status.lastEventAt)}, ${share}% attributed.`;
+        const warning = status.eventsReceived > 0 && share === 0
+          ? "Revenue is arriving, but the attribution edit is missing. Add clv_vid and UTM fields to checkout creation so revenue-by-channel works."
+          : undefined;
+        return success({ projectId: input.projectId, ...status, attributedPercent: share, summary, ...(warning ? { warning } : {}) });
+      } catch (error) {
+        return failure(error, env);
+      }
+    },
+
+    addEvent: async (input: { projectId: number | string; name: string; type: string; url?: string; value?: number; where?: string }): Promise<ToolResult> => {
+      try {
+        const event = await resolveApi(context).createEvent(input.projectId, {
+          name: input.name,
+          type: input.type,
+          ...(input.url ? { url: input.url } : {}),
+          ...(input.value !== undefined ? { value: input.value } : {}),
+        });
+        const properties = input.value === undefined ? "{}" : `{ value: ${input.value} }`;
+        const where = input.where?.trim() || (input.type === "form_submit" || input.type === "signup"
+          ? "the successful submit handler, after the server confirms success"
+          : input.type === "click" ? "the click handler for the intended control" : "the handler where this action succeeds");
+        return success({
+          projectId: input.projectId,
+          event,
+          proposedEdit: `window.clarvivo.trackEvent(${JSON.stringify(input.name)}, ${properties});`,
+          placement: `Add the proposed call in ${where}. This tool registered the event in Clarvivo; it did not edit your files.`,
+          sdk: "window.clarvivo also exposes trackConversion(value, currency) and trackPurchase(...).",
+        });
+      } catch (error) {
+        return failure(error, env);
+      }
+    },
+
+    listFunnels: async (input: { projectId: number | string }): Promise<ToolResult> => {
+      try {
+        const funnels = await resolveApi(context).listFunnels(input.projectId);
+        return success({ projectId: input.projectId, funnels, count: funnels.length });
+      } catch (error) {
+        return failure(error, env);
+      }
+    },
+
+    createFunnel: async (input: { projectId: number | string; name: string; steps: Array<{ name: string; url: string }> }): Promise<ToolResult> => {
+      try {
+        const api = resolveApi(context);
+        const existing = (await api.listFunnels(input.projectId)).find((funnel) => funnel.name.trim().toLowerCase() === input.name.trim().toLowerCase());
+        const ordered = input.steps.map((step, index) => ({ ...step, order: index + 1 }));
+        const funnel = existing ?? await api.createFunnel(input.projectId, { name: input.name, steps: ordered });
+        const rows = await api.getAnalytics(input.projectId, 90).catch(() => []);
+        const pages = knownPagePaths(rows);
+        const missingSteps = (existing?.steps ?? ordered)
+          .filter((step) => !pages.has(normalizePath(step.url)))
+          .map(({ name, url }) => ({ name, url, guidance: "No matching tracked page is visible yet; visit this deployed page or register a matching event." }));
+        return success({ projectId: input.projectId, funnel, reusedExistingFunnel: Boolean(existing), missingSteps });
+      } catch (error) {
+        return failure(error, env);
+      }
+    },
+
+    createAlert: async (input: { projectId: number | string; type: string; threshold: number }): Promise<ToolResult> => {
+      try {
+        const api = resolveApi(context);
+        const existing = (await api.listAlerts(input.projectId)).find((alert) => alert.type === input.type);
+        const alert = existing ?? await api.createAlert(input.projectId, { type: input.type, threshold: input.threshold });
+        return success({ projectId: input.projectId, alert, reusedExistingAlert: Boolean(existing) });
+      } catch (error) {
+        return failure(error, env);
       }
     },
   };

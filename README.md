@@ -1,6 +1,6 @@
 # `@clarvivo/mcp`
 
-Install Clarvivo analytics without leaving your coding agent. The server detects the app framework, reuses or creates the right Clarvivo project, and returns the exact file and code edit. It can then verify real traffic and return compact analytics summaries.
+Install Clarvivo analytics without leaving your coding agent. The server detects the app framework, reuses or creates the right Clarvivo project, and returns the exact file and code edit. It can then verify real traffic, connect payment revenue, and configure events, funnels, and alerts.
 
 ## The 60-second flow
 
@@ -20,9 +20,33 @@ The tracker observes `history.pushState`, `history.replaceState`, and `popstate`
 | `get_install_snippet` | Get framework-specific instructions for an existing API key or project. |
 | `verify_installation` | Prove the deployed snippet works from a proof-of-life event count, without reading analytics. |
 | `list_projects` | List accessible projects and their public tracking API keys. |
-| `get_stats` | Return a small summary for 1–90 days, capped to the top five pages and referrers. |
+| `get_stats` | Return a small traffic and top-line revenue summary for 1–90 days, capped to the top five pages and referrers. |
+| `connect_revenue` | Detect Stripe, Polar, Razorpay, Paddle, Lemon Squeezy, or Dodo; connect its webhook; and return the attribution edit. |
+| `verify_revenue` | Summarise webhook proof-of-life and attribution coverage without dumping payment data. |
+| `add_event` | Register an event and propose the `window.clarvivo.trackEvent(...)` edit and handler placement. |
+| `create_funnel` | Create an ordered funnel or reuse one with the same name, then flag unmatched steps. |
+| `create_alert` | Create a traffic/conversion alert or reuse an alert of the same type. |
+| `list_funnels` | List funnels and their ordered steps. |
 
 `setup_analytics` supports Next.js App Router, Next.js Pages Router, Vite (React/Vue/Svelte), Create React App, Astro, SvelteKit, Nuxt, Remix / React Router v7, Gatsby, Docusaurus, and static HTML.
+
+## Connect payments
+
+1. Ask the agent: **“Connect Clarvivo revenue for this project.”**
+2. `connect_revenue` detects the payment SDK from `package.json`, connects the provider, and returns the webhook URL plus the exact events to enable.
+3. Copy the provider signing secret from its webhook settings into Clarvivo at **Dashboard → Settings → Integrations**. Do not paste the secret into the agent or tool call.
+4. Apply the returned client-to-server attribution edit. It reads `clv_vid` from browser local storage and puts it in the provider's supported metadata, custom data, or notes field. This is the step that makes revenue-by-channel work.
+5. Complete a test payment, wait for delivery, then ask: **“Verify Clarvivo revenue.”**
+
+The checkout snippet adapts to a Next.js route handler, Express handler, or serverless function. If no supported SDK is found, the tool returns a server-only signed `POST /api/ingest/:apiKey/revenue` example using `CLARVIVO_INGEST_SECRET`; that secret must never enter browser code.
+
+## Track events & funnels
+
+1. Ask: **“Track successful signups in Clarvivo.”** `add_event` registers the event and proposes a `window.clarvivo.trackEvent(...)` call for the success handler. The tool reports the edit; your coding agent applies it.
+2. Ask: **“Create a Signup funnel with Landing, Pricing, and Success.”** `create_funnel` orders the steps, reuses an existing same-name funnel on retries, and points out steps that do not yet match a tracked page.
+3. Ask: **“Alert me when conversion drops by 20%.”** `create_alert` reuses an existing alert of that type instead of creating duplicates.
+
+The browser SDK global is `window.clarvivo`. It exposes `trackEvent(name, properties)`, `trackConversion(value, currency)`, and `trackPurchase(...)`.
 
 ## Configuration
 
@@ -199,6 +223,8 @@ Node.js 20 or newer is required.
 
 Every tool checks for `CLARVIVO_API_TOKEN` before doing work. If it is missing, the tool returns the token URL and a copy-pasteable environment variable name. The bearer token is never included in tool output or logs.
 
+Tools also report a missing token scope by name and link directly to the API-token settings page. Payment signing secrets are dashboard-only: `connect_revenue` has no secret input and sends only `{ provider, connected: true }` to Clarvivo.
+
 Clarvivo has no free tier. If project creation returns `PROJECT_LIMIT_REACHED`, HTTP 402, or HTTP 403, the tool stops immediately and links to [billing](https://app.clarvivo.com/dashboard/billing). It does not retry or claim the project was created.
 
 ## Development
@@ -217,13 +243,13 @@ Set `CLARVIVO_BASE_URL=http://127.0.0.1:5000` when using a local Clarvivo server
 No submission happens automatically. Complete these after the package and public repository are ready:
 
 - [ ] **npm:** publish `clarvivo-mcp` publicly, confirm the `bin` is executable, and test a clean `npx -y @clarvivo/mcp` MCP initialize handshake. Use npm provenance/2FA and inspect `npm pack --dry-run` first.
-- [ ] **Official MCP Registry:** choose and add a verified `mcpName` to `package.json` (a GitHub-authenticated `io.github.<owner>/...` name or DNS-authenticated Clarvivo namespace), publish the matching npm version first, create `server.json` with stdio transport and required `CLARVIVO_API_TOKEN`, then run `mcp-publisher login`, `mcp-publisher validate`, and `mcp-publisher publish`. The registry stores metadata, not the package. Follow the [official registry quickstart](https://modelcontextprotocol.io/registry/quickstart).
+- [ ] **Official MCP Registry:** verify the `io.github.cracked-collective/clarvivo` namespace, publish the matching npm version first, then run `mcp-publisher login`, `mcp-publisher validate`, and `mcp-publisher publish` against the included `server.json`. The registry stores metadata, not the package. Follow the [official registry quickstart](https://modelcontextprotocol.io/registry/quickstart).
 - [ ] **Smithery:** authenticate with the Smithery CLI and publish a local MCP bundle (`.mcpb`) under the Clarvivo namespace, or publish a hosted URL if an HTTP transport is added later: `smithery mcp publish <bundle.mcpb> -n clarvivo/clarvivo`. Smithery’s current publisher accepts hosted URLs or MCP bundles; see [Smithery CLI publishing](https://www.npmjs.com/package/@smithery/cli).
 - [ ] **mcp.so:** use the [server submission form](https://mcp.so/submit?type=server). It currently requires a public repository URL and name; the paid path is optional and advertises immediate publishing.
-- [ ] **PulseMCP:** use the site’s **Submit** flow and provide the public repository, npm install command, five-tool inventory, auth variable, license, and maintainer contact. Re-check the form at submission time because PulseMCP does not publish a stable submission schema.
-- [ ] **Glama:** click **Add Server** in the [Glama registry](https://glama.ai/mcp/servers), submit the public GitHub repository, and add `glama.json` if organization ownership/metadata verification requests it. Confirm Glama can inspect all five tools.
+- [ ] **PulseMCP:** use the site’s **Submit** flow and provide the public repository, npm install command, eleven-tool inventory, auth variable, license, and maintainer contact. Re-check the form at submission time because PulseMCP does not publish a stable submission schema.
+- [ ] **Glama:** click **Add Server** in the [Glama registry](https://glama.ai/mcp/servers), submit the public GitHub repository, and add `glama.json` if organization ownership/metadata verification requests it. Confirm Glama can inspect all eleven tools.
 - [ ] **Cursor Marketplace:** package the MCP config as an Agent Plugin or Cursor Plugin with a valid `plugin.json` / `.cursor-plugin/plugin.json`, public Git repository, README, and optional committed logo; declare the token variable in the manifest schema, then submit the repository at [cursor.com/marketplace/publish](https://cursor.com/marketplace/publish). Use the [official submission checklist](https://cursor.com/docs/reference/plugins).
 - [ ] **awesome-mcp-servers:** first ensure the Glama listing exists, then fork [punkpeye/awesome-mcp-servers](https://github.com/punkpeye/awesome-mcp-servers), add one alphabetized line in the appropriate category with repository link and concise description, and open a PR following its [contribution guide](https://github.com/punkpeye/awesome-mcp-servers/blob/main/CONTRIBUTING.md).
 - [ ] **Additional discovery:** submit the same canonical metadata to `mcpservers.org`, `MCP Central`, and `mcp-marketplace.io`; keep every listing pointed at the npm package and one canonical repository so versions and security notices do not drift.
 
-For every listing, use the same name, description, repository, license, token variable, Node requirement, five-tool inventory, and install snippets from this README.
+For every listing, use the same name, description, repository, license, token variable, Node requirement, eleven-tool inventory, and install snippets from this README.

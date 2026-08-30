@@ -8,6 +8,7 @@ import {
   getInstallInstructions,
   trackingSnippet,
 } from "../src/frameworks.js";
+import { detectServerFramework, revenueChecklist } from "../src/payments.js";
 
 const tempDirs: string[] = [];
 
@@ -74,5 +75,21 @@ describe("snippet generation", () => {
   it("uses CLARVIVO_BASE_URL for the public tracker URL", () => {
     expect(trackingSnippet("abc", "http://127.0.0.1:5000/"))
       .toBe('<script defer src="http://127.0.0.1:5000/js/abc/analytics.js"></script>');
+  });
+});
+
+describe("payment server snippets", () => {
+  it("uses a Next.js route handler for App Router projects", () => {
+    const root = fixture({ "package.json": '{"dependencies":{"next":"16"}}', "app/layout.tsx": "" });
+    expect(detectServerFramework(root)).toBe("next-route-handler");
+    expect(revenueChecklist("stripe", "https://example.test/webhook", root).join("\n"))
+      .toContain("export async function POST(request: Request)");
+  });
+
+  it("uses req.body for Express checkout handlers", () => {
+    const root = fixture({ "package.json": '{"dependencies":{"express":"5"}}' });
+    expect(detectServerFramework(root)).toBe("express");
+    expect(revenueChecklist("razorpay", "https://example.test/webhook", root).join("\n"))
+      .toContain("req.body");
   });
 });

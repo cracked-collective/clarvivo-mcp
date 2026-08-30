@@ -3,7 +3,7 @@ import { z } from "zod";
 import { createToolHandlers } from "./tools.js";
 
 export function createServer(): McpServer {
-  const server = new McpServer({ name: "clarvivo", version: "0.1.0" });
+  const server = new McpServer({ name: "clarvivo", version: "0.2.0" });
   const handlers = createToolHandlers();
   const projectId = z.union([z.number(), z.string()]).describe("Clarvivo project ID");
 
@@ -52,6 +52,65 @@ export function createServer(): McpServer {
     },
     annotations: { readOnlyHint: true, idempotentHint: true },
   }, handlers.getStats);
+
+  server.registerTool("connect_revenue", {
+    title: "Connect payment revenue",
+    description: "Detect a supported payment SDK (or use the named provider), connect its Clarvivo webhook, and return a three-step setup checklist with the exact attribution edit. Never accepts or transmits webhook secrets.",
+    inputSchema: {
+      projectId,
+      provider: z.enum(["stripe", "polar", "razorpay", "paddle", "lemonsqueezy", "dodo", "custom"]).optional(),
+    },
+    annotations: { idempotentHint: true },
+  }, handlers.connectRevenue);
+
+  server.registerTool("verify_revenue", {
+    title: "Verify payment revenue",
+    description: "Check payment webhook proof-of-life and attribution coverage without returning revenue amounts or customer data.",
+    inputSchema: { projectId },
+    annotations: { readOnlyHint: true, idempotentHint: true },
+  }, handlers.verifyRevenue);
+
+  server.registerTool("add_event", {
+    title: "Register a tracked event",
+    description: "Register a Clarvivo event and propose the exact window.clarvivo.trackEvent call and handler placement. This tool does not edit files.",
+    inputSchema: {
+      projectId,
+      name: z.string().min(1),
+      type: z.enum(["click", "form_submit", "page_view", "purchase", "signup", "custom"]),
+      url: z.string().min(1).optional(),
+      value: z.number().finite().optional(),
+      where: z.string().min(1).optional().describe("Human-readable handler or file location for the proposed edit"),
+    },
+  }, handlers.addEvent);
+
+  server.registerTool("create_funnel", {
+    title: "Create a conversion funnel",
+    description: "Create an ordered funnel, reusing a case-insensitive name match so retries never duplicate it, and flag steps without a known tracked page.",
+    inputSchema: {
+      projectId,
+      name: z.string().min(1),
+      steps: z.array(z.object({ name: z.string().min(1), url: z.string().min(1) })).min(2),
+    },
+    annotations: { idempotentHint: true },
+  }, handlers.createFunnel);
+
+  server.registerTool("create_alert", {
+    title: "Create an analytics alert",
+    description: "Create a traffic or conversion alert, reusing an existing alert of the same type.",
+    inputSchema: {
+      projectId,
+      type: z.enum(["traffic_spike", "traffic_dip", "conversion_drop"]),
+      threshold: z.number().finite().nonnegative(),
+    },
+    annotations: { idempotentHint: true },
+  }, handlers.createAlert);
+
+  server.registerTool("list_funnels", {
+    title: "List conversion funnels",
+    description: "List the project's funnels and ordered steps.",
+    inputSchema: { projectId },
+    annotations: { readOnlyHint: true, idempotentHint: true },
+  }, handlers.listFunnels);
 
   return server;
 }

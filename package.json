@@ -1,7 +1,8 @@
 {
   "name": "@clarvivo/mcp",
-  "version": "0.1.1",
-  "description": "Install Clarvivo analytics from your coding agent, then query compact traffic stats.",
+  "mcpName": "io.github.cracked-collective/clarvivo-mcp",
+  "version": "0.2.0",
+  "description": "Install Clarvivo analytics, connect payments, and manage events, funnels, and alerts from your coding agent.",
   "type": "module",
   "bin": {
     "clarvivo-mcp": "dist/index.js"
@@ -40,6 +41,5 @@
     "@types/node": "^22.18.0",
     "typescript": "^5.9.2",
     "vitest": "^3.2.4"
-  },
-  "mcpName": "io.github.cracked-collective/clarvivo-mcp"
+  }
 }

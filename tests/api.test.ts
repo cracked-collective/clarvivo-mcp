@@ -25,4 +25,25 @@ describe("HttpClarvivoApi", () => {
     await expect(api.createProject({ name: "Example", domain: "example.com" }))
       .rejects.toEqual(expect.objectContaining<Partial<ClarvivoApiError>>({ status: 403, code: "PROJECT_LIMIT_REACHED" }));
   });
+
+  it("sends only provider and connected when connecting revenue", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      provider: "stripe", connected: true, webhookUrl: "https://example.test/webhooks/stripe/key", secretConfigured: false,
+    }), { status: 200 }));
+    const api = new HttpClarvivoApi({ CLARVIVO_API_TOKEN: "top-secret" }, fetchMock);
+    await api.connectRevenue(42, "stripe");
+    const request = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(JSON.parse(String(request.body))).toEqual({ provider: "stripe", connected: true });
+    expect(String(request.body)).not.toContain("secret");
+  });
+
+  it("preserves TOKEN_SCOPE_REQUIRED scope from mocked HTTP", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      message: "API token requires scope: revenue:read", code: "TOKEN_SCOPE_REQUIRED", scope: "revenue:read",
+    }), { status: 403 }));
+    const api = new HttpClarvivoApi({ CLARVIVO_API_TOKEN: "secret" }, fetchMock);
+    await expect(api.getRevenueStatus(1)).rejects.toEqual(expect.objectContaining({
+      code: "TOKEN_SCOPE_REQUIRED", scope: "revenue:read",
+    }));
+  });
 });

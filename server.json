@@ -1,29 +1,32 @@
 {
-  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
-  "name": "io.github.cracked-collective/clarvivo-mcp",
-  "description": "Install Clarvivo analytics from your coding agent, then query compact traffic stats.",
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.cracked-collective/clarvivo",
+  "description": "Install Clarvivo analytics, connect payments, and manage events, funnels, and alerts.",
   "repository": {
-    "url": "https://github.com/cracked-collective/clarvivo-mcp",
+    "url": "https://github.com/cracked-collective/clarvivo-vercel",
     "source": "github"
   },
-  "version": "0.1.1",
+  "version": "0.2.0",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@clarvivo/mcp",
-      "version": "0.1.1",
+      "version": "0.2.0",
       "transport": { "type": "stdio" },
       "environmentVariables": [
         {
           "name": "CLARVIVO_API_TOKEN",
-          "description": "Clarvivo API token from app.clarvivo.com/dashboard/settings?tab=api-tokens",
+          "description": "Clarvivo API token",
           "isRequired": true,
+          "format": "string",
           "isSecret": true
         },
         {
           "name": "CLARVIVO_BASE_URL",
-          "description": "Override the Clarvivo API base URL (self-hosting or local development).",
-          "isRequired": false
+          "description": "Optional Clarvivo base URL for self-hosted or local environments",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
         }
       ]
     }

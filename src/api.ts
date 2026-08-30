@@ -24,6 +24,51 @@ export interface RealtimeSnapshot {
   [key: string]: unknown;
 }
 
+export interface FunnelStep {
+  name: string;
+  url: string;
+  order: number;
+  [key: string]: unknown;
+}
+
+export interface ClarvivoFunnel {
+  id: number | string;
+  name: string;
+  steps: FunnelStep[];
+  [key: string]: unknown;
+}
+
+export interface ClarvivoAlert {
+  id: number | string;
+  type: string;
+  threshold: number | string | null;
+  isActive?: boolean;
+  [key: string]: unknown;
+}
+
+export interface RevenueSummary {
+  totalRevenue?: number | string;
+  eventCount?: number | string;
+  averageAmount?: number | string;
+  [key: string]: unknown;
+}
+
+export interface RevenueConnection {
+  provider: string;
+  connected: true;
+  webhookUrl: string;
+  secretConfigured: boolean;
+}
+
+export interface RevenueStatus {
+  connected: Record<string, boolean>;
+  secretConfigured: Record<string, boolean>;
+  eventsReceived: number;
+  lastEventAt: string | null;
+  lastSource: string | null;
+  attributedShare: number | null;
+}
+
 export interface InstallStatus {
   installed: boolean;
   eventsReceived: number;
@@ -38,6 +83,14 @@ export interface ClarvivoApi {
   getInstallStatus(projectId: number | string): Promise<InstallStatus>;
   getAnalytics(projectId: number | string, days: number): Promise<AnalyticsRow[]>;
   getRealtime(projectId: number | string): Promise<RealtimeSnapshot>;
+  getRevenue(projectId: number | string): Promise<RevenueSummary>;
+  connectRevenue(projectId: number | string, provider: string): Promise<RevenueConnection>;
+  getRevenueStatus(projectId: number | string): Promise<RevenueStatus>;
+  createEvent(projectId: number | string, input: { name: string; type: string; url?: string; value?: number }): Promise<Record<string, unknown>>;
+  listFunnels(projectId: number | string): Promise<ClarvivoFunnel[]>;
+  createFunnel(projectId: number | string, input: { name: string; steps: FunnelStep[] }): Promise<ClarvivoFunnel>;
+  listAlerts(projectId: number | string): Promise<ClarvivoAlert[]>;
+  createAlert(projectId: number | string, input: { type: string; threshold: number }): Promise<ClarvivoAlert>;
 }
 
 export class ClarvivoApiError extends Error {
@@ -45,6 +98,7 @@ export class ClarvivoApiError extends Error {
     message: string,
     public readonly status: number,
     public readonly code?: string,
+    public readonly scope?: string,
   ) {
     super(message);
     this.name = "ClarvivoApiError";
@@ -104,6 +158,7 @@ export class HttpClarvivoApi implements ClarvivoApi {
         typeof object.message === "string" ? object.message : `Clarvivo API request failed (${response.status}).`,
         response.status,
         typeof object.code === "string" ? object.code : undefined,
+        typeof object.scope === "string" ? object.scope : undefined,
       );
     }
     return body as T;
@@ -127,6 +182,50 @@ export class HttpClarvivoApi implements ClarvivoApi {
 
   getRealtime(projectId: number | string): Promise<RealtimeSnapshot> {
     return this.request<RealtimeSnapshot>(`/api/projects/${encodeURIComponent(String(projectId))}/realtime/active`);
+  }
+
+  getRevenue(projectId: number | string): Promise<RevenueSummary> {
+    return this.request<RevenueSummary>(`/api/projects/${encodeURIComponent(String(projectId))}/revenue`);
+  }
+
+  connectRevenue(projectId: number | string, provider: string): Promise<RevenueConnection> {
+    return this.request<RevenueConnection>(`/api/projects/${encodeURIComponent(String(projectId))}/revenue-connection`, {
+      method: "PUT",
+      body: JSON.stringify({ provider, connected: true }),
+    });
+  }
+
+  getRevenueStatus(projectId: number | string): Promise<RevenueStatus> {
+    return this.request<RevenueStatus>(`/api/projects/${encodeURIComponent(String(projectId))}/revenue-status`);
+  }
+
+  createEvent(projectId: number | string, input: { name: string; type: string; url?: string; value?: number }): Promise<Record<string, unknown>> {
+    return this.request<Record<string, unknown>>(`/api/projects/${encodeURIComponent(String(projectId))}/events`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+
+  listFunnels(projectId: number | string): Promise<ClarvivoFunnel[]> {
+    return this.request<ClarvivoFunnel[]>(`/api/projects/${encodeURIComponent(String(projectId))}/funnels`);
+  }
+
+  createFunnel(projectId: number | string, input: { name: string; steps: FunnelStep[] }): Promise<ClarvivoFunnel> {
+    return this.request<ClarvivoFunnel>(`/api/projects/${encodeURIComponent(String(projectId))}/funnels`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+
+  listAlerts(projectId: number | string): Promise<ClarvivoAlert[]> {
+    return this.request<ClarvivoAlert[]>(`/api/projects/${encodeURIComponent(String(projectId))}/alerts`);
+  }
+
+  createAlert(projectId: number | string, input: { type: string; threshold: number }): Promise<ClarvivoAlert> {
+    return this.request<ClarvivoAlert>(`/api/projects/${encodeURIComponent(String(projectId))}/alerts`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
   }
 }
 
