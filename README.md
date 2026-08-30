@@ -51,7 +51,7 @@ Create `.cursor/mcp.json` in a project, or `~/.cursor/mcp.json` globally:
   "mcpServers": {
     "clarvivo": {
       "command": "npx",
-      "args": ["-y", "clarvivo-mcp"],
+      "args": ["-y", "@clarvivo/mcp"],
       "env": {
         "CLARVIVO_API_TOKEN": "clv_live_REPLACE_ME"
       }
@@ -73,7 +73,7 @@ Add this to `~/.codex/config.toml`:
 ```toml
 [mcp_servers.clarvivo]
 command = "npx"
-args = ["-y", "clarvivo-mcp"]
+args = ["-y", "@clarvivo/mcp"]
 
 [mcp_servers.clarvivo.env]
 CLARVIVO_API_TOKEN = "clv_live_REPLACE_ME"
@@ -98,7 +98,7 @@ Open `~/.codeium/windsurf/mcp_config.json` and add:
   "mcpServers": {
     "clarvivo": {
       "command": "npx",
-      "args": ["-y", "clarvivo-mcp"],
+      "args": ["-y", "@clarvivo/mcp"],
       "env": {
         "CLARVIVO_API_TOKEN": "clv_live_REPLACE_ME"
       }
@@ -118,7 +118,7 @@ Open Cline’s MCP Servers settings, choose **Configure MCP Servers**, and add t
   "mcpServers": {
     "clarvivo": {
       "command": "npx",
-      "args": ["-y", "clarvivo-mcp"],
+      "args": ["-y", "@clarvivo/mcp"],
       "env": {
         "CLARVIVO_API_TOKEN": "clv_live_REPLACE_ME"
       },
@@ -140,7 +140,7 @@ Create `.vscode/mcp.json`:
     "clarvivo": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "clarvivo-mcp"],
+      "args": ["-y", "@clarvivo/mcp"],
       "env": {
         "CLARVIVO_API_TOKEN": "clv_live_REPLACE_ME"
       }
@@ -164,7 +164,7 @@ Open your Zed settings file and merge:
   "context_servers": {
     "clarvivo": {
       "command": "npx",
-      "args": ["-y", "clarvivo-mcp"],
+      "args": ["-y", "@clarvivo/mcp"],
       "env": {
         "CLARVIVO_API_TOKEN": "clv_live_REPLACE_ME"
       }
@@ -184,7 +184,7 @@ For clients using the common `mcpServers` shape:
   "mcpServers": {
     "clarvivo": {
       "command": "npx",
-      "args": ["-y", "clarvivo-mcp"],
+      "args": ["-y", "@clarvivo/mcp"],
       "env": {
         "CLARVIVO_API_TOKEN": "clv_live_REPLACE_ME"
       }
