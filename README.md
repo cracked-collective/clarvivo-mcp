@@ -1,4 +1,4 @@
-# `clarvivo-mcp`
+# `@clarvivo/mcp`
 
 Install Clarvivo analytics without leaving your coding agent. The server detects the app framework, reuses or creates the right Clarvivo project, and returns the exact file and code edit. It can then verify real traffic and return compact analytics summaries.
 
