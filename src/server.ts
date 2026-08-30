@@ -31,7 +31,7 @@ export function createServer(): McpServer {
 
   server.registerTool("verify_installation", {
     title: "Verify analytics installation",
-    description: "Check real analytics and realtime reads to prove that traffic from the deployed site has reached Clarvivo. Does not send synthetic events.",
+    description: "Check Clarvivo's proof-of-life receipt to confirm that traffic from the deployed site has arrived, without reading analytics or sending synthetic events.",
     inputSchema: { projectId },
     annotations: { readOnlyHint: true, idempotentHint: true },
   }, handlers.verifyInstallation);

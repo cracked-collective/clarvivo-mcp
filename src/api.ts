@@ -24,9 +24,18 @@ export interface RealtimeSnapshot {
   [key: string]: unknown;
 }
 
+export interface InstallStatus {
+  installed: boolean;
+  eventsReceived: number;
+  lastEventAt: string | null;
+  locked: boolean;
+  upgradeUrl?: string;
+}
+
 export interface ClarvivoApi {
   listProjects(): Promise<ClarvivoProject[]>;
   createProject(input: { name: string; domain: string }): Promise<ClarvivoProject>;
+  getInstallStatus(projectId: number | string): Promise<InstallStatus>;
   getAnalytics(projectId: number | string, days: number): Promise<AnalyticsRow[]>;
   getRealtime(projectId: number | string): Promise<RealtimeSnapshot>;
 }
@@ -50,6 +59,10 @@ export function tokenSetupMessage(baseUrl = process.env.CLARVIVO_BASE_URL || DEF
 
 export function planLimitMessage(baseUrl = process.env.CLARVIVO_BASE_URL || DEFAULT_BASE_URL): string {
   return `Your Clarvivo plan cannot create another project. Open ${baseUrl.replace(/\/$/, "")}/dashboard/billing — checkout takes about 30 seconds — then re-run setup_analytics.`;
+}
+
+export function payToReadMessage(baseUrl = process.env.CLARVIVO_BASE_URL || DEFAULT_BASE_URL): string {
+  return `Pay $1 to read your Clarvivo data. Open ${baseUrl.replace(/\/$/, "")}/dashboard/billing, then re-run get_stats.`;
 }
 
 export function requireToken(env: NodeJS.ProcessEnv = process.env): string {
@@ -104,6 +117,10 @@ export class HttpClarvivoApi implements ClarvivoApi {
     return this.request<ClarvivoProject>("/api/projects", { method: "POST", body: JSON.stringify(input) });
   }
 
+  getInstallStatus(projectId: number | string): Promise<InstallStatus> {
+    return this.request<InstallStatus>(`/api/projects/${encodeURIComponent(String(projectId))}/install-status`);
+  }
+
   getAnalytics(projectId: number | string, days: number): Promise<AnalyticsRow[]> {
     return this.request<AnalyticsRow[]>(`/api/projects/${encodeURIComponent(String(projectId))}/analytics?days=${days}`);
   }
@@ -115,6 +132,13 @@ export class HttpClarvivoApi implements ClarvivoApi {
 
 export function isPlanLimit(error: unknown): boolean {
   return error instanceof ClarvivoApiError && (
-    error.code === "PROJECT_LIMIT_REACHED" || error.status === 402 || error.status === 403
+    error.code === "PROJECT_LIMIT_REACHED" ||
+    error.code === "PAYMENT_REQUIRED_FOR_MORE_PROJECTS" ||
+    error.status === 402 ||
+    error.status === 403
   );
+}
+
+export function isAnalyticsLockout(error: unknown): boolean {
+  return error instanceof ClarvivoApiError && error.status === 402;
 }

@@ -6,6 +6,7 @@ function mockApi(overrides: Partial<ClarvivoApi> = {}): ClarvivoApi {
   return {
     listProjects: vi.fn().mockResolvedValue([]),
     createProject: vi.fn().mockResolvedValue({ id: 1, name: "Example", domain: "example.com", apiKey: "public-key" }),
+    getInstallStatus: vi.fn().mockResolvedValue({ installed: false, eventsReceived: 0, lastEventAt: null, locked: false }),
     getAnalytics: vi.fn().mockResolvedValue([]),
     getRealtime: vi.fn().mockResolvedValue({ count: 0 }),
     ...overrides,
@@ -48,6 +49,20 @@ describe("tool error UX", () => {
       .setupAnalytics({ domain: "example.com", framework: "vite" });
     expect(result.content[0].text).toContain("/dashboard/billing");
   });
+
+  it("turns a stats 402 into a pay-to-read action", async () => {
+    const api = mockApi({
+      getAnalytics: vi.fn().mockRejectedValue(new ClarvivoApiError("raw lockout", 402, "TRIAL_EXPIRED")),
+    });
+    const result = await createToolHandlers({
+      env: { CLARVIVO_API_TOKEN: "secret", CLARVIVO_BASE_URL: "https://self.example" },
+      api,
+    }).getStats({ projectId: 1, days: 7 });
+    expect(result).toMatchObject({ isError: true });
+    expect(result.content[0].text).toContain("Pay $1 to read your Clarvivo data");
+    expect(result.content[0].text).toContain("https://self.example/dashboard/billing");
+    expect(result.content[0].text).not.toContain("raw lockout");
+  });
 });
 
 describe("setup_analytics", () => {
@@ -65,5 +80,36 @@ describe("setup_analytics", () => {
     expect(result).toMatchObject({ structuredContent: { reusedExistingProject: true } });
     expect(result.content[0].text).toContain("existing-public-key");
     expect(result.content[0].text).not.toContain("do-not-echo");
+  });
+});
+
+describe("verify_installation", () => {
+  it("uses proof-of-life status and carries the count plus locked upgrade line", async () => {
+    const getAnalytics = vi.fn();
+    const getRealtime = vi.fn();
+    const getInstallStatus = vi.fn().mockResolvedValue({
+      installed: true,
+      eventsReceived: 1247,
+      lastEventAt: "2026-08-30T10:00:00.000Z",
+      locked: true,
+      upgradeUrl: "https://app.clarvivo.com/dashboard/billing",
+    });
+    const result = await createToolHandlers({
+      env: { CLARVIVO_API_TOKEN: "secret" },
+      api: mockApi({ getInstallStatus, getAnalytics, getRealtime }),
+    }).verifyInstallation({ projectId: 42 });
+
+    expect(getInstallStatus).toHaveBeenCalledWith(42);
+    expect(getAnalytics).not.toHaveBeenCalled();
+    expect(getRealtime).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      structuredContent: {
+        installed: true,
+        eventsReceived: 1247,
+        locked: true,
+      },
+    });
+    expect(result.content[0].text).toContain("1,247 pageviews recorded");
+    expect(result.content[0].text).toContain("Pay $1 to read your data");
   });
 });

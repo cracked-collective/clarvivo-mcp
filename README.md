@@ -18,7 +18,7 @@ The tracker observes `history.pushState`, `history.replaceState`, and `popstate`
 | --- | --- |
 | `setup_analytics` | Detect the framework, reuse a matching-domain project or create one, and return the exact installation edit. |
 | `get_install_snippet` | Get framework-specific instructions for an existing API key or project. |
-| `verify_installation` | Prove the deployed snippet works by reading real analytics and realtime traffic. |
+| `verify_installation` | Prove the deployed snippet works from a proof-of-life event count, without reading analytics. |
 | `list_projects` | List accessible projects and their public tracking API keys. |
 | `get_stats` | Return a small summary for 1–90 days, capped to the top five pages and referrers. |
 

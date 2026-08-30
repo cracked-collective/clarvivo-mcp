@@ -3,7 +3,9 @@ import {
   type AnalyticsRow,
   type ClarvivoApi,
   HttpClarvivoApi,
+  isAnalyticsLockout,
   isPlanLimit,
+  payToReadMessage,
   planLimitMessage,
   requireToken,
 } from "./api.js";
@@ -28,10 +30,12 @@ function success(data: Record<string, unknown>): ToolSuccess {
   return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }], structuredContent: data };
 }
 
-function failure(error: unknown, env: NodeJS.ProcessEnv, allowPlanLimitMessage = false): ToolFailure {
-  const message = allowPlanLimitMessage && isPlanLimit(error)
+function failure(error: unknown, env: NodeJS.ProcessEnv, mode?: "project-limit" | "analytics-lockout"): ToolFailure {
+  const message = mode === "project-limit" && isPlanLimit(error)
     ? planLimitMessage(env.CLARVIVO_BASE_URL)
-    : error instanceof Error ? error.message : "Clarvivo request failed.";
+    : mode === "analytics-lockout" && isAnalyticsLockout(error)
+      ? payToReadMessage(env.CLARVIVO_BASE_URL)
+      : error instanceof Error ? error.message : "Clarvivo request failed.";
   return { content: [{ type: "text", text: message }], isError: true };
 }
 
@@ -150,7 +154,7 @@ export function createToolHandlers(context: ToolContext = {}) {
           nextStep: `Edit ${install.file} exactly as described, deploy the site, then run verify_installation with projectId ${project.id}.`,
         });
       } catch (error) {
-        return failure(error, env, true);
+        return failure(error, env, "project-limit");
       }
     },
 
@@ -176,26 +180,25 @@ export function createToolHandlers(context: ToolContext = {}) {
     verifyInstallation: async (input: { projectId: number | string }): Promise<ToolResult> => {
       try {
         const api = resolveApi(context);
-        const [rows, realtime] = await Promise.all([api.getAnalytics(input.projectId, 30), api.getRealtime(input.projectId)]);
-        const trafficRows = rows.filter((row) => number(row.pageviews) > 0 || number(row.uniqueVisitors ?? row.visitors) > 0);
-        const lastTrafficDate = trafficRows
-          .map((row) => row.date)
-          .filter((date): date is string => typeof date === "string")
-          .sort()
-          .at(-1);
-        const activeNow = number(realtime.count);
-        const hasTraffic = trafficRows.length > 0 || activeNow > 0;
+        const status = await api.getInstallStatus(input.projectId);
+        const count = number(status.eventsReceived);
+        const upgradeUrl = status.upgradeUrl || `${baseUrl(context)}/dashboard/billing`;
+        const baseMessage = status.installed
+          ? `Your tracking is live. ${count.toLocaleString("en-US")} pageviews recorded.`
+          : "No real traffic has arrived yet. Deploy the snippet, visit the live site, navigate to another route, wait up to 90 seconds, then run this check again.";
         return success({
           projectId: input.projectId,
-          installed: hasTraffic,
-          activeNow,
-          lastTrafficDate: lastTrafficDate ?? null,
-          message: hasTraffic
-            ? "Real traffic has reached Clarvivo; the installation is working."
-            : "No real traffic has arrived in the last 30 days. Deploy the snippet, visit the live site, navigate to another route, wait up to 90 seconds, then run this check again.",
+          installed: status.installed,
+          eventsReceived: count,
+          lastEventAt: status.lastEventAt,
+          locked: status.locked,
+          ...(status.locked ? { upgradeUrl } : {}),
+          message: status.locked
+            ? `${baseMessage} Pay $1 to read your data: ${upgradeUrl}`
+            : baseMessage,
         });
       } catch (error) {
-        return failure(error, env);
+        return failure(error, env, "analytics-lockout");
       }
     },
 
@@ -215,7 +218,7 @@ export function createToolHandlers(context: ToolContext = {}) {
         const [rows, realtime] = await Promise.all([api.getAnalytics(input.projectId, days), api.getRealtime(input.projectId)]);
         return success({ projectId: input.projectId, ...summarizeStats(rows, number(realtime.count), days) });
       } catch (error) {
-        return failure(error, env);
+        return failure(error, env, "analytics-lockout");
       }
     },
   };
