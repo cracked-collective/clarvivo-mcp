@@ -1,4 +1,4 @@
-# `@clarvivo/mcp`
+# `clarvivo-mcp`
 
 Install Clarvivo analytics without leaving your coding agent. The server detects the app framework, reuses or creates the right Clarvivo project, and returns the exact file and code edit. It can then verify real traffic and return compact analytics summaries.
 
@@ -51,7 +51,7 @@ Create `.cursor/mcp.json` in a project, or `~/.cursor/mcp.json` globally:
   "mcpServers": {
     "clarvivo": {
       "command": "npx",
-      "args": ["-y", "@clarvivo/mcp"],
+      "args": ["-y", "clarvivo-mcp"],
       "env": {
         "CLARVIVO_API_TOKEN": "clv_live_REPLACE_ME"
       }
@@ -73,7 +73,7 @@ Add this to `~/.codex/config.toml`:
 ```toml
 [mcp_servers.clarvivo]
 command = "npx"
-args = ["-y", "@clarvivo/mcp"]
+args = ["-y", "clarvivo-mcp"]
 
 [mcp_servers.clarvivo.env]
 CLARVIVO_API_TOKEN = "clv_live_REPLACE_ME"
@@ -98,7 +98,7 @@ Open `~/.codeium/windsurf/mcp_config.json` and add:
   "mcpServers": {
     "clarvivo": {
       "command": "npx",
-      "args": ["-y", "@clarvivo/mcp"],
+      "args": ["-y", "clarvivo-mcp"],
       "env": {
         "CLARVIVO_API_TOKEN": "clv_live_REPLACE_ME"
       }
@@ -118,7 +118,7 @@ Open Cline’s MCP Servers settings, choose **Configure MCP Servers**, and add t
   "mcpServers": {
     "clarvivo": {
       "command": "npx",
-      "args": ["-y", "@clarvivo/mcp"],
+      "args": ["-y", "clarvivo-mcp"],
       "env": {
         "CLARVIVO_API_TOKEN": "clv_live_REPLACE_ME"
       },
@@ -140,7 +140,7 @@ Create `.vscode/mcp.json`:
     "clarvivo": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "@clarvivo/mcp"],
+      "args": ["-y", "clarvivo-mcp"],
       "env": {
         "CLARVIVO_API_TOKEN": "clv_live_REPLACE_ME"
       }
@@ -164,7 +164,7 @@ Open your Zed settings file and merge:
   "context_servers": {
     "clarvivo": {
       "command": "npx",
-      "args": ["-y", "@clarvivo/mcp"],
+      "args": ["-y", "clarvivo-mcp"],
       "env": {
         "CLARVIVO_API_TOKEN": "clv_live_REPLACE_ME"
       }
@@ -184,7 +184,7 @@ For clients using the common `mcpServers` shape:
   "mcpServers": {
     "clarvivo": {
       "command": "npx",
-      "args": ["-y", "@clarvivo/mcp"],
+      "args": ["-y", "clarvivo-mcp"],
       "env": {
         "CLARVIVO_API_TOKEN": "clv_live_REPLACE_ME"
       }
@@ -216,7 +216,7 @@ Set `CLARVIVO_BASE_URL=http://127.0.0.1:5000` when using a local Clarvivo server
 
 No submission happens automatically. Complete these after the package and public repository are ready:
 
-- [ ] **npm:** publish `@clarvivo/mcp` publicly, confirm the `bin` is executable, and test a clean `npx -y @clarvivo/mcp` MCP initialize handshake. Use npm provenance/2FA and inspect `npm pack --dry-run` first.
+- [ ] **npm:** publish `clarvivo-mcp` publicly, confirm the `bin` is executable, and test a clean `npx -y @clarvivo/mcp` MCP initialize handshake. Use npm provenance/2FA and inspect `npm pack --dry-run` first.
 - [ ] **Official MCP Registry:** choose and add a verified `mcpName` to `package.json` (a GitHub-authenticated `io.github.<owner>/...` name or DNS-authenticated Clarvivo namespace), publish the matching npm version first, create `server.json` with stdio transport and required `CLARVIVO_API_TOKEN`, then run `mcp-publisher login`, `mcp-publisher validate`, and `mcp-publisher publish`. The registry stores metadata, not the package. Follow the [official registry quickstart](https://modelcontextprotocol.io/registry/quickstart).
 - [ ] **Smithery:** authenticate with the Smithery CLI and publish a local MCP bundle (`.mcpb`) under the Clarvivo namespace, or publish a hosted URL if an HTTP transport is added later: `smithery mcp publish <bundle.mcpb> -n clarvivo/clarvivo`. Smithery’s current publisher accepts hosted URLs or MCP bundles; see [Smithery CLI publishing](https://www.npmjs.com/package/@smithery/cli).
 - [ ] **mcp.so:** use the [server submission form](https://mcp.so/submit?type=server). It currently requires a public repository URL and name; the paid path is optional and advertises immediate publishing.

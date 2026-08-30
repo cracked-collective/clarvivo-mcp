@@ -11,7 +11,7 @@ Create an API token at [app.clarvivo.com/dashboard/settings?tab=api-tokens](http
   "mcpServers": {
     "clarvivo": {
       "command": "npx",
-      "args": ["-y", "@clarvivo/mcp"],
+      "args": ["-y", "clarvivo-mcp"],
       "env": {
         "CLARVIVO_API_TOKEN": "clv_live_REPLACE_ME"
       }
@@ -20,7 +20,7 @@ Create an API token at [app.clarvivo.com/dashboard/settings?tab=api-tokens](http
 }
 ```
 
-See the [`@clarvivo/mcp` README](../mcp/README.md) for Claude Code, Cursor, Codex CLI, Windsurf, Cline, VS Code, and Zed-specific formats.
+See the [`clarvivo-mcp` README](../mcp/README.md) for Claude Code, Cursor, Codex CLI, Windsurf, Cline, VS Code, and Zed-specific formats.
 
 ## 2. Ask your agent
 
