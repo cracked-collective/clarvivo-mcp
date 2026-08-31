@@ -116,7 +116,8 @@ export class ClarvivoApiError extends Error {
 export const DEFAULT_BASE_URL = "https://app.clarvivo.com";
 
 export function tokenSetupMessage(baseUrl = process.env.CLARVIVO_BASE_URL || DEFAULT_BASE_URL): string {
-  return `Clarvivo needs an API token. Open ${baseUrl.replace(/\/$/, "")}/dashboard/settings?tab=api-tokens, create a token, then set CLARVIVO_API_TOKEN=clv_live_<your-token> in this MCP server's environment and restart the client.`;
+  const appUrl = baseUrl.replace(/\/$/, "");
+  return `Clarvivo needs an API token: sign in and create one on ${appUrl}/dashboard if you are a new user, or in ${appUrl}/dashboard/settings?tab=api-tokens if you are a paying user, then set CLARVIVO_API_TOKEN=clv_live_<your-token> in this MCP server's environment and restart the client.`;
 }
 
 export function planLimitMessage(baseUrl = process.env.CLARVIVO_BASE_URL || DEFAULT_BASE_URL): string {

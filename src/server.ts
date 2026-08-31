@@ -3,7 +3,7 @@ import { z } from "zod";
 import { createToolHandlers } from "./tools.js";
 
 export function createServer(): McpServer {
-  const server = new McpServer({ name: "clarvivo", version: "0.3.0" });
+  const server = new McpServer({ name: "clarvivo", version: "0.3.1" });
   const handlers = createToolHandlers();
   const projectId = z.union([z.number(), z.string()]).describe("Clarvivo project ID");
 

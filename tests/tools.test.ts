@@ -47,7 +47,8 @@ describe("tool error UX", () => {
     ]);
     for (const result of results) {
       expect(result).toMatchObject({ isError: true });
-      expect(result.content[0].text).toContain("/dashboard/settings?tab=api-tokens");
+      expect(result.content[0].text).toContain("/dashboard if you are a new user");
+      expect(result.content[0].text).toContain("/dashboard/settings?tab=api-tokens if you are a paying user");
       expect(result.content[0].text).toContain("CLARVIVO_API_TOKEN=clv_live_<your-token>");
     }
   });
