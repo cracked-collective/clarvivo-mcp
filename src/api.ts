@@ -19,6 +19,13 @@ export interface AnalyticsRow {
   [key: string]: unknown;
 }
 
+export type ExportFormat = "csv" | "json";
+
+export interface ExportDownload {
+  data: string;
+  contentType: string | null;
+}
+
 export interface RealtimeSnapshot {
   count?: number;
   [key: string]: unknown;
@@ -82,6 +89,7 @@ export interface ClarvivoApi {
   createProject(input: { name: string; domain: string }): Promise<ClarvivoProject>;
   getInstallStatus(projectId: number | string): Promise<InstallStatus>;
   getAnalytics(projectId: number | string, days: number): Promise<AnalyticsRow[]>;
+  exportData(projectId: number | string, format: ExportFormat, days: number): Promise<ExportDownload>;
   getRealtime(projectId: number | string): Promise<RealtimeSnapshot>;
   getRevenue(projectId: number | string): Promise<RevenueSummary>;
   connectRevenue(projectId: number | string, provider: string): Promise<RevenueConnection>;
@@ -119,6 +127,10 @@ export function payToReadMessage(baseUrl = process.env.CLARVIVO_BASE_URL || DEFA
   return `Pay $1 to read your Clarvivo data. Open ${baseUrl.replace(/\/$/, "")}/dashboard/billing, then re-run get_stats.`;
 }
 
+export function exportPlanMessage(baseUrl = process.env.CLARVIVO_BASE_URL || DEFAULT_BASE_URL): string {
+  return `Clarvivo data exports need a paid plan. Open ${baseUrl.replace(/\/$/, "")}/dashboard/billing, upgrade, then retry export_data.`;
+}
+
 export function requireToken(env: NodeJS.ProcessEnv = process.env): string {
   const token = env.CLARVIVO_API_TOKEN?.trim();
   if (!token) throw new Error(tokenSetupMessage(env.CLARVIVO_BASE_URL || DEFAULT_BASE_URL));
@@ -134,7 +146,7 @@ export class HttpClarvivoApi implements ClarvivoApi {
     this.token = requireToken(env);
   }
 
-  private async request<T>(pathname: string, init: RequestInit = {}): Promise<T> {
+  private async response(pathname: string, init: RequestInit = {}): Promise<Response> {
     const response = await this.fetchImpl(`${this.baseUrl}${pathname}`, {
       ...init,
       headers: {
@@ -145,6 +157,7 @@ export class HttpClarvivoApi implements ClarvivoApi {
       },
     });
 
+    if (response.ok) return response;
     const text = await response.text();
     let body: unknown;
     try {
@@ -152,14 +165,23 @@ export class HttpClarvivoApi implements ClarvivoApi {
     } catch {
       body = text;
     }
-    if (!response.ok) {
-      const object = body && typeof body === "object" ? body as Record<string, unknown> : {};
-      throw new ClarvivoApiError(
-        typeof object.message === "string" ? object.message : `Clarvivo API request failed (${response.status}).`,
-        response.status,
-        typeof object.code === "string" ? object.code : undefined,
-        typeof object.scope === "string" ? object.scope : undefined,
-      );
+    const object = body && typeof body === "object" ? body as Record<string, unknown> : {};
+    throw new ClarvivoApiError(
+      typeof object.message === "string" ? object.message : `Clarvivo API request failed (${response.status}).`,
+      response.status,
+      typeof object.code === "string" ? object.code : undefined,
+      typeof object.scope === "string" ? object.scope : undefined,
+    );
+  }
+
+  private async request<T>(pathname: string, init: RequestInit = {}): Promise<T> {
+    const response = await this.response(pathname, init);
+    const text = await response.text();
+    let body: unknown;
+    try {
+      body = text ? JSON.parse(text) : undefined;
+    } catch {
+      body = text;
     }
     return body as T;
   }
@@ -178,6 +200,20 @@ export class HttpClarvivoApi implements ClarvivoApi {
 
   getAnalytics(projectId: number | string, days: number): Promise<AnalyticsRow[]> {
     return this.request<AnalyticsRow[]>(`/api/projects/${encodeURIComponent(String(projectId))}/analytics?days=${days}`);
+  }
+
+  async exportData(projectId: number | string, format: ExportFormat, days: number): Promise<ExportDownload> {
+    const end = new Date();
+    const start = new Date(end);
+    start.setUTCDate(start.getUTCDate() - days + 1);
+    const query = new URLSearchParams({
+      startDate: start.toISOString().slice(0, 10),
+      endDate: end.toISOString(),
+    });
+    const response = await this.response(
+      `/api/projects/${encodeURIComponent(String(projectId))}/export/${format}?${query}`,
+    );
+    return { data: await response.text(), contentType: response.headers.get("content-type") };
   }
 
   getRealtime(projectId: number | string): Promise<RealtimeSnapshot> {

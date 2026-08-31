@@ -3,7 +3,7 @@ import { z } from "zod";
 import { createToolHandlers } from "./tools.js";
 
 export function createServer(): McpServer {
-  const server = new McpServer({ name: "clarvivo", version: "0.2.0" });
+  const server = new McpServer({ name: "clarvivo", version: "0.3.0" });
   const handlers = createToolHandlers();
   const projectId = z.union([z.number(), z.string()]).describe("Clarvivo project ID");
 
@@ -52,6 +52,48 @@ export function createServer(): McpServer {
     },
     annotations: { readOnlyHint: true, idempotentHint: true },
   }, handlers.getStats);
+
+  server.registerTool("get_traffic_sources", {
+    title: "Get traffic sources",
+    description: "Aggregate the selected analytics window into compact traffic-channel shares, the top ten referrers, and the top ten UTM source/medium/campaign rows. Never returns raw daily rows.",
+    inputSchema: {
+      projectId,
+      days: z.number().int().min(1).max(90).default(30).describe("Reporting window from 1 to 90 days"),
+    },
+    annotations: { readOnlyHint: true, idempotentHint: true },
+  }, handlers.getTrafficSources);
+
+  server.registerTool("get_pages", {
+    title: "Get top pages",
+    description: "Aggregate page analytics and return only the top ten pages by views, including known visitor, entry, exit, bounce, and average-time metrics.",
+    inputSchema: {
+      projectId,
+      days: z.number().int().min(1).max(90).default(30).describe("Reporting window from 1 to 90 days"),
+    },
+    annotations: { readOnlyHint: true, idempotentHint: true },
+  }, handlers.getPages);
+
+  server.registerTool("get_audience", {
+    title: "Get audience breakdown",
+    description: "Return compact device, browser, OS, country, visitor-segment, screen-resolution, and language aggregates for the selected window.",
+    inputSchema: {
+      projectId,
+      days: z.number().int().min(1).max(90).default(30).describe("Reporting window from 1 to 90 days"),
+    },
+    annotations: { readOnlyHint: true, idempotentHint: true },
+  }, handlers.getAudience);
+
+  server.registerTool("export_data", {
+    title: "Export analytics data",
+    description: "Write a CSV or JSON analytics export to a safe local path, or write a self-contained printable HTML report for saving as PDF. Returns file metadata, never file contents.",
+    inputSchema: {
+      projectId,
+      format: z.enum(["csv", "json", "pdf"]),
+      days: z.number().int().min(1).max(90).default(30).describe("Reporting window from 1 to 90 days"),
+      path: z.string().min(1).optional().describe("Destination inside the current working directory"),
+      overwrite: z.boolean().default(false).describe("Replace an existing destination file"),
+    },
+  }, handlers.exportData);
 
   server.registerTool("connect_revenue", {
     title: "Connect payment revenue",

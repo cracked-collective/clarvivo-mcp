@@ -21,6 +21,10 @@ The tracker observes `history.pushState`, `history.replaceState`, and `popstate`
 | `verify_installation` | Prove the deployed snippet works from a proof-of-life event count, without reading analytics. |
 | `list_projects` | List accessible projects and their public tracking API keys. |
 | `get_stats` | Return a small traffic and top-line revenue summary for 1–90 days, capped to the top five pages and referrers. |
+| `get_traffic_sources` | Aggregate up to 90 days into channel shares, the top ten referrers, and the top ten UTM source rows. |
+| `get_pages` | Return the top ten pages with visitors, entries, exits, bounce rate, and average time. |
+| `get_audience` | Summarise devices, browsers, operating systems, countries, visitor segments, screens, and languages. |
+| `export_data` | Write CSV/JSON locally, or create a self-contained printable HTML report for PDF; return metadata only. |
 | `connect_revenue` | Detect Stripe, Polar, Razorpay, Paddle, Lemon Squeezy, or Dodo; connect its webhook; and return the attribution edit. |
 | `verify_revenue` | Summarise webhook proof-of-life and attribution coverage without dumping payment data. |
 | `add_event` | Register an event and propose the `window.clarvivo.trackEvent(...)` edit and handler placement. |
@@ -29,6 +33,18 @@ The tracker observes `history.pushState`, `history.replaceState`, and `popstate`
 | `list_funnels` | List funnels and their ordered steps. |
 
 `setup_analytics` supports Next.js App Router, Next.js Pages Router, Vite (React/Vue/Svelte), Create React App, Astro, SvelteKit, Nuxt, Remix / React Router v7, Gatsby, Docusaurus, and static HTML.
+
+## Read your data
+
+Ask for a quick overview with `get_stats`, then use `get_traffic_sources`, `get_pages`, or `get_audience` when you need a focused breakdown. These tools aggregate the full reporting window inside the MCP server, cap every returned list, and never place raw daily analytics rows into the model context. Their default window is 30 days and accepts 1–90 days.
+
+Analytics reads require the `analytics:read` token scope. If the account is still awaiting its first payment or its access has lapsed, the tools stop at the same billing wall as the dashboard and link to the billing page.
+
+## Export
+
+`export_data` writes the result to disk instead of returning file contents. CSV and JSON use Clarvivo's paid export routes; `pdf` creates a slim, self-contained `.html` report with headline metrics, channels, top pages, and sources. Open that file in a browser and use **Print → Save as PDF**, matching the dashboard workflow.
+
+The default filename is `clarvivo-export-<project>-<date>.<ext>` in the current working directory. A custom `path` must remain inside that directory and cannot contain `..`. Existing files are protected unless `overwrite: true` is passed. Data export remains plan-gated and uses the existing `analytics:read` scope.
 
 ## Connect payments
 
@@ -246,10 +262,10 @@ No submission happens automatically. Complete these after the package and public
 - [ ] **Official MCP Registry:** verify the `io.github.cracked-collective/clarvivo` namespace, publish the matching npm version first, then run `mcp-publisher login`, `mcp-publisher validate`, and `mcp-publisher publish` against the included `server.json`. The registry stores metadata, not the package. Follow the [official registry quickstart](https://modelcontextprotocol.io/registry/quickstart).
 - [ ] **Smithery:** authenticate with the Smithery CLI and publish a local MCP bundle (`.mcpb`) under the Clarvivo namespace, or publish a hosted URL if an HTTP transport is added later: `smithery mcp publish <bundle.mcpb> -n clarvivo/clarvivo`. Smithery’s current publisher accepts hosted URLs or MCP bundles; see [Smithery CLI publishing](https://www.npmjs.com/package/@smithery/cli).
 - [ ] **mcp.so:** use the [server submission form](https://mcp.so/submit?type=server). It currently requires a public repository URL and name; the paid path is optional and advertises immediate publishing.
-- [ ] **PulseMCP:** use the site’s **Submit** flow and provide the public repository, npm install command, eleven-tool inventory, auth variable, license, and maintainer contact. Re-check the form at submission time because PulseMCP does not publish a stable submission schema.
-- [ ] **Glama:** click **Add Server** in the [Glama registry](https://glama.ai/mcp/servers), submit the public GitHub repository, and add `glama.json` if organization ownership/metadata verification requests it. Confirm Glama can inspect all eleven tools.
+- [ ] **PulseMCP:** use the site’s **Submit** flow and provide the public repository, npm install command, fifteen-tool inventory, auth variable, license, and maintainer contact. Re-check the form at submission time because PulseMCP does not publish a stable submission schema.
+- [ ] **Glama:** click **Add Server** in the [Glama registry](https://glama.ai/mcp/servers), submit the public GitHub repository, and add `glama.json` if organization ownership/metadata verification requests it. Confirm Glama can inspect all fifteen tools.
 - [ ] **Cursor Marketplace:** package the MCP config as an Agent Plugin or Cursor Plugin with a valid `plugin.json` / `.cursor-plugin/plugin.json`, public Git repository, README, and optional committed logo; declare the token variable in the manifest schema, then submit the repository at [cursor.com/marketplace/publish](https://cursor.com/marketplace/publish). Use the [official submission checklist](https://cursor.com/docs/reference/plugins).
 - [ ] **awesome-mcp-servers:** first ensure the Glama listing exists, then fork [punkpeye/awesome-mcp-servers](https://github.com/punkpeye/awesome-mcp-servers), add one alphabetized line in the appropriate category with repository link and concise description, and open a PR following its [contribution guide](https://github.com/punkpeye/awesome-mcp-servers/blob/main/CONTRIBUTING.md).
 - [ ] **Additional discovery:** submit the same canonical metadata to `mcpservers.org`, `MCP Central`, and `mcp-marketplace.io`; keep every listing pointed at the npm package and one canonical repository so versions and security notices do not drift.
 
-For every listing, use the same name, description, repository, license, token variable, Node requirement, eleven-tool inventory, and install snippets from this README.
+For every listing, use the same name, description, repository, license, token variable, Node requirement, fifteen-tool inventory, and install snippets from this README.

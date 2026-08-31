@@ -1,7 +1,7 @@
 {
   "name": "@clarvivo/mcp",
   "mcpName": "io.github.cracked-collective/clarvivo-mcp",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Install Clarvivo analytics, connect payments, and manage events, funnels, and alerts from your coding agent.",
   "type": "module",
   "bin": {

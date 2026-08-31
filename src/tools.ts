@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 import {
   type AnalyticsRow,
@@ -6,10 +7,12 @@ import {
   HttpClarvivoApi,
   isAnalyticsLockout,
   isPlanLimit,
+  exportPlanMessage,
   payToReadMessage,
   planLimitMessage,
   requireToken,
 } from "./api.js";
+import { aggregateAudience, aggregatePages, aggregateTrafficSources } from "./analytics.js";
 import {
   detectFramework,
   getInstallInstructions,
@@ -22,6 +25,7 @@ import {
   revenueChecklist,
   signedRevenueSnippet,
 } from "./payments.js";
+import { generateReportHtml } from "./report.js";
 
 export interface ToolContext {
   env?: NodeJS.ProcessEnv;
@@ -37,15 +41,61 @@ function success(data: Record<string, unknown>): ToolSuccess {
   return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }], structuredContent: data };
 }
 
-function failure(error: unknown, env: NodeJS.ProcessEnv, mode?: "project-limit" | "analytics-lockout"): ToolFailure {
+function failure(error: unknown, env: NodeJS.ProcessEnv, mode?: "project-limit" | "analytics-lockout" | "export"): ToolFailure {
   const message = error instanceof ClarvivoApiError && error.code === "TOKEN_SCOPE_REQUIRED"
     ? `This tool needs the ${error.scope || "required"} scope. Open ${(env.CLARVIVO_BASE_URL || "https://app.clarvivo.com").replace(/\/$/, "")}/dashboard/settings?tab=api-tokens, add ${error.scope || "that scope"} to this API token (or create a token with it), then restart the MCP client and retry.`
+    : mode === "export" && error instanceof ClarvivoApiError && error.status === 403
+      ? exportPlanMessage(env.CLARVIVO_BASE_URL)
+    : mode === "export" && isAnalyticsLockout(error)
+      ? payToReadMessage(env.CLARVIVO_BASE_URL)
     : mode === "project-limit" && isPlanLimit(error)
     ? planLimitMessage(env.CLARVIVO_BASE_URL)
     : mode === "analytics-lockout" && isAnalyticsLockout(error)
       ? payToReadMessage(env.CLARVIVO_BASE_URL)
       : error instanceof Error ? error.message : "Clarvivo request failed.";
   return { content: [{ type: "text", text: message }], isError: true };
+}
+
+function reportingDays(input: number | undefined, fallback = 30): number {
+  return Math.max(1, Math.min(90, Math.round(input ?? fallback)));
+}
+
+function exportPath(cwd: string, requested: string | undefined, projectId: number | string, extension: string): string {
+  if (requested?.split(/[\\/]+/).includes("..")) {
+    throw new Error("Export path cannot contain '..' traversal.");
+  }
+  const safeProject = String(projectId).replace(/[^0-9A-Za-z_-]+/g, "-") || "project";
+  const date = new Date().toISOString().slice(0, 10);
+  let target = requested?.trim() || `clarvivo-export-${safeProject}-${date}.${extension}`;
+  if (extension === "html" && path.extname(target).toLowerCase() !== ".html") {
+    target = `${target.slice(0, target.length - path.extname(target).length)}.html`;
+  }
+  const resolvedCwd = path.resolve(cwd);
+  const resolved = path.resolve(resolvedCwd, target);
+  const relative = path.relative(resolvedCwd, resolved);
+  if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
+    throw new Error("Export path must stay inside the current working directory.");
+  }
+  return resolved;
+}
+
+function exportedRowCount(format: "csv" | "json", data: string): number {
+  if (format === "csv") {
+    const lines = data.trimEnd().split(/\r?\n/);
+    return Math.max(0, lines.length - 1);
+  }
+  try {
+    const parsed = JSON.parse(data) as unknown;
+    if (Array.isArray(parsed)) return parsed.length;
+    if (parsed && typeof parsed === "object") {
+      const record = parsed as Record<string, unknown>;
+      if (Number.isFinite(Number(record.rowCount))) return Number(record.rowCount);
+      if (Array.isArray(record.rows)) return record.rows.length;
+    }
+  } catch {
+    // The successful HTTP response is still written verbatim; unknown shapes count as 0.
+  }
+  return 0;
 }
 
 function projectApiKey(projects: Awaited<ReturnType<ClarvivoApi["listProjects"]>>, projectId: number | string): string {
@@ -279,6 +329,71 @@ export function createToolHandlers(context: ToolContext = {}) {
         });
       } catch (error) {
         return failure(error, env, "analytics-lockout");
+      }
+    },
+
+    getTrafficSources: async (input: { projectId: number | string; days?: number }): Promise<ToolResult> => {
+      try {
+        const days = reportingDays(input.days);
+        const rows = await resolveApi(context).getAnalytics(input.projectId, days);
+        return success({ projectId: input.projectId, days, ...aggregateTrafficSources(rows) });
+      } catch (error) {
+        return failure(error, env, "analytics-lockout");
+      }
+    },
+
+    getPages: async (input: { projectId: number | string; days?: number }): Promise<ToolResult> => {
+      try {
+        const days = reportingDays(input.days);
+        const rows = await resolveApi(context).getAnalytics(input.projectId, days);
+        return success({ projectId: input.projectId, days, pages: aggregatePages(rows) });
+      } catch (error) {
+        return failure(error, env, "analytics-lockout");
+      }
+    },
+
+    getAudience: async (input: { projectId: number | string; days?: number }): Promise<ToolResult> => {
+      try {
+        const days = reportingDays(input.days);
+        const rows = await resolveApi(context).getAnalytics(input.projectId, days);
+        return success({ projectId: input.projectId, days, ...aggregateAudience(rows) });
+      } catch (error) {
+        return failure(error, env, "analytics-lockout");
+      }
+    },
+
+    exportData: async (input: { projectId: number | string; format: "csv" | "json" | "pdf"; days?: number; path?: string; overwrite?: boolean }): Promise<ToolResult> => {
+      try {
+        const api = resolveApi(context);
+        const days = reportingDays(input.days);
+        const extension = input.format === "pdf" ? "html" : input.format;
+        const writtenPath = exportPath(cwd, input.path, input.projectId, extension);
+        if (!input.overwrite && fs.existsSync(writtenPath)) {
+          throw new Error(`Refusing to overwrite existing file: ${writtenPath}. Pass overwrite: true to replace it.`);
+        }
+        let data: string;
+        let rowCount: number;
+        if (input.format === "pdf") {
+          const rows = await api.getAnalytics(input.projectId, days);
+          data = generateReportHtml(input.projectId, days, rows);
+          rowCount = rows.length;
+        } else {
+          const download = await api.exportData(input.projectId, input.format, days);
+          data = download.data;
+          rowCount = exportedRowCount(input.format, data);
+        }
+        fs.writeFileSync(writtenPath, data, { encoding: "utf8", flag: input.overwrite ? "w" : "wx" });
+        const sizeBytes = Buffer.byteLength(data, "utf8");
+        return success({
+          projectId: input.projectId,
+          format: input.format,
+          path: writtenPath,
+          rowCount,
+          sizeBytes,
+          ...(input.format === "pdf" ? { message: "Open this HTML report in a browser and use Print → Save as PDF." } : {}),
+        });
+      } catch (error) {
+        return failure(error, env, "export");
       }
     },
 

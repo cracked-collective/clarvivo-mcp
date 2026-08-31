@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { ClarvivoApiError, type ClarvivoApi } from "../src/api.js";
+import { ClarvivoApiError, HttpClarvivoApi, type ClarvivoApi } from "../src/api.js";
 import { createToolHandlers } from "../src/tools.js";
 
 function mockApi(overrides: Partial<ClarvivoApi> = {}): ClarvivoApi {
@@ -11,6 +11,7 @@ function mockApi(overrides: Partial<ClarvivoApi> = {}): ClarvivoApi {
     createProject: vi.fn().mockResolvedValue({ id: 1, name: "Example", domain: "example.com", apiKey: "public-key" }),
     getInstallStatus: vi.fn().mockResolvedValue({ installed: false, eventsReceived: 0, lastEventAt: null, locked: false }),
     getAnalytics: vi.fn().mockResolvedValue([]),
+    exportData: vi.fn().mockResolvedValue({ data: "", contentType: "text/plain" }),
     getRealtime: vi.fn().mockResolvedValue({ count: 0 }),
     getRevenue: vi.fn().mockResolvedValue({ totalRevenue: 0, eventCount: 0, averageAmount: 0 }),
     connectRevenue: vi.fn().mockResolvedValue({ provider: "stripe", connected: true, webhookUrl: "https://app.clarvivo.com/webhooks/stripe/public-key", secretConfigured: false }),
@@ -33,6 +34,10 @@ describe("tool error UX", () => {
       handlers.verifyInstallation({ projectId: 1 }),
       handlers.listProjects(),
       handlers.getStats({ projectId: 1, days: 7 }),
+      handlers.getTrafficSources({ projectId: 1 }),
+      handlers.getPages({ projectId: 1 }),
+      handlers.getAudience({ projectId: 1 }),
+      handlers.exportData({ projectId: 1, format: "csv" }),
       handlers.connectRevenue({ projectId: 1, provider: "stripe" }),
       handlers.verifyRevenue({ projectId: 1 }),
       handlers.addEvent({ projectId: 1, name: "signup", type: "signup" }),
@@ -90,6 +95,82 @@ describe("tool error UX", () => {
     expect(result.content[0].text).toContain("funnels:read");
     expect(result.content[0].text).toContain("/dashboard/settings?tab=api-tokens");
     expect(result.content[0].text).not.toContain("secret");
+  });
+});
+
+describe("export_data", () => {
+  it.each([
+    ["csv" as const, "Date,Visitors\n2026-08-30,4\n2026-08-31,7\n", 2],
+    ["json" as const, JSON.stringify({ rowCount: 2, rows: [{ visitors: 4 }, { visitors: 7 }] }), 2],
+  ])("writes %s from mocked HTTP and returns metadata without contents", async (format, body, rowCount) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "clarvivo-export-"));
+    const fetchMock = vi.fn().mockResolvedValue(new Response(body, { status: 200 }));
+    const api = new HttpClarvivoApi({ CLARVIVO_API_TOKEN: "secret", CLARVIVO_BASE_URL: "https://self.example" }, fetchMock);
+    const result = await createToolHandlers({ env: { CLARVIVO_API_TOKEN: "secret" }, cwd: root, api })
+      .exportData({ projectId: 42, format, path: `report.${format}` });
+
+    expect(result).toMatchObject({ structuredContent: { rowCount, sizeBytes: Buffer.byteLength(body), path: path.join(root, `report.${format}`) } });
+    expect(fs.readFileSync(path.join(root, `report.${format}`), "utf8")).toBe(body);
+    expect(result.content[0].text).not.toContain(body);
+    expect(fetchMock.mock.calls[0][0]).toMatch(new RegExp(`/api/projects/42/export/${format}\\?startDate=`));
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  it("refuses traversal and existing files unless overwrite is explicit", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "clarvivo-export-safe-"));
+    fs.writeFileSync(path.join(root, "existing.csv"), "keep");
+    const exportData = vi.fn().mockResolvedValue({ data: "Date,Visitors\n", contentType: "text/csv" });
+    const handlers = createToolHandlers({ env: { CLARVIVO_API_TOKEN: "secret" }, cwd: root, api: mockApi({ exportData }) });
+
+    const traversal = await handlers.exportData({ projectId: 1, format: "csv", path: "nested/../escape.csv" });
+    expect(traversal).toMatchObject({ isError: true });
+    expect(traversal.content[0].text).toContain("traversal");
+    const outside = await handlers.exportData({ projectId: 1, format: "csv", path: path.join(os.tmpdir(), "outside.csv") });
+    expect(outside).toMatchObject({ isError: true });
+    expect(outside.content[0].text).toContain("inside the current working directory");
+    const overwrite = await handlers.exportData({ projectId: 1, format: "csv", path: "existing.csv" });
+    expect(overwrite).toMatchObject({ isError: true });
+    expect(overwrite.content[0].text).toContain("Refusing to overwrite");
+    expect(exportData).not.toHaveBeenCalled();
+    expect(fs.readFileSync(path.join(root, "existing.csv"), "utf8")).toBe("keep");
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  it("writes a self-contained printable HTML report with no external URLs", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "clarvivo-report-"));
+    const rows = [{
+      visitors: 5, pageviews: 9, sessions: 4,
+      trafficChannels: { direct: 3, social: 2 },
+      pageDetails: [{ path: "/", views: 9, uniqueVisitors: 5, entries: 4, bounceCount: 1, totalDuration: 45 }],
+      sourceBreakdown: [{ source: "direct", medium: "(none)", campaign: "(none)", visitors: 3 }],
+    }];
+    const result = await createToolHandlers({
+      env: { CLARVIVO_API_TOKEN: "secret" }, cwd: root,
+      api: mockApi({ getAnalytics: vi.fn().mockResolvedValue(rows) }),
+    }).exportData({ projectId: "demo", format: "pdf", path: "report.pdf" });
+
+    expect(result).toMatchObject({ structuredContent: { format: "pdf", path: path.join(root, "report.html"), rowCount: 1 } });
+    const html = fs.readFileSync(path.join(root, "report.html"), "utf8");
+    expect(html).toContain("Traffic channels");
+    expect(html).toContain("Top pages");
+    expect(html).toContain("Top sources");
+    expect(html).not.toMatch(/https?:\/\//i);
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  it.each([
+    [402, "TRIAL_EXPIRED", "Pay $1 to read your Clarvivo data"],
+    [403, "FEATURE_NOT_IN_PLAN", "data exports need a paid plan"],
+  ])("turns HTTP %s into actionable billing guidance", async (status, code, expected) => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ message: "raw", code }), { status }));
+    const api = new HttpClarvivoApi({ CLARVIVO_API_TOKEN: "secret", CLARVIVO_BASE_URL: "https://self.example" }, fetchMock);
+    const result = await createToolHandlers({
+      env: { CLARVIVO_API_TOKEN: "secret", CLARVIVO_BASE_URL: "https://self.example" }, cwd: process.cwd(), api,
+    }).exportData({ projectId: 1, format: "csv", path: `never-${status}.csv` });
+    expect(result).toMatchObject({ isError: true });
+    expect(result.content[0].text).toContain(expected);
+    expect(result.content[0].text).toContain("https://self.example/dashboard/billing");
+    expect(result.content[0].text).not.toContain("raw");
   });
 });
 
