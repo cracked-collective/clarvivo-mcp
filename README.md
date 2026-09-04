@@ -4,7 +4,7 @@ Install Clarvivo analytics without leaving your coding agent. The server detects
 
 ## The 60-second flow
 
-1. Create an API token at [app.clarvivo.com/dashboard/settings?tab=api-tokens](https://app.clarvivo.com/dashboard/settings?tab=api-tokens).
+1. Sign in to Clarvivo. New users create an API token right on the dashboard page after signing in; paying users create one in **Settings → API tokens**.
 2. Add this MCP server to your coding client with `CLARVIVO_API_TOKEN` in its environment.
 3. Ask the agent: **“Set up Clarvivo analytics for `example.com`.”**
 4. The agent detects the framework, calls `setup_analytics`, makes the returned edit, and deploys through your normal workflow.
@@ -23,6 +23,9 @@ The tracker observes `history.pushState`, `history.replaceState`, and `popstate`
 | `get_stats` | Return a small traffic and top-line revenue summary for 1–90 days, capped to the top five pages and referrers. |
 | `get_traffic_sources` | Aggregate up to 90 days into channel shares, the top ten referrers, and the top ten UTM source rows. |
 | `get_pages` | Return the top ten pages with visitors, entries, exits, bounce rate, and average time. |
+| `get_search_queries` | Return the Google searches bringing people to the site, with clicks, impressions, CTR, and average position. Spends Search Console quota. |
+| `get_search_pages` | Return the pages earning Google Search impressions and clicks, with CTR and average position. Spends Search Console quota. |
+| `get_search_trends` | Return the daily Search Console series plus window totals, read from stored snapshots so it costs no Search Console quota. |
 | `get_audience` | Summarise devices, browsers, operating systems, countries, visitor segments, screens, and languages. |
 | `export_data` | Write CSV/JSON locally, or create a self-contained printable HTML report for PDF; return metadata only. |
 | `connect_revenue` | Detect Stripe, Polar, Razorpay, Paddle, Lemon Squeezy, or Dodo; connect its webhook; and return the attribution edit. |
@@ -33,6 +36,17 @@ The tracker observes `history.pushState`, `history.replaceState`, and `popstate`
 | `list_funnels` | List funnels and their ordered steps. |
 
 `setup_analytics` supports Next.js App Router, Next.js Pages Router, Vite (React/Vue/Svelte), Create React App, Astro, SvelteKit, Nuxt, Remix / React Router v7, Gatsby, Docusaurus, and static HTML.
+
+## Search Console
+
+`get_search_queries` and `get_search_pages` proxy Google's Search Analytics API, so each
+call spends the project's Search Console quota; both cap what they return and report the
+total they trimmed. `get_search_trends` reads Clarvivo's stored snapshots instead, costs
+no quota, and is the one to reach for on repeated checks.
+
+All three need a token carrying `search:read`, and the project must already have Search
+Console connected in Clarvivo — the MCP reads the data, it does not run the Google
+sign-in for you.
 
 ## Read your data
 

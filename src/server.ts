@@ -3,7 +3,7 @@ import { z } from "zod";
 import { createToolHandlers } from "./tools.js";
 
 export function createServer(): McpServer {
-  const server = new McpServer({ name: "clarvivo", version: "0.3.1" });
+  const server = new McpServer({ name: "clarvivo", version: "0.4.0" });
   const handlers = createToolHandlers();
   const projectId = z.union([z.number(), z.string()]).describe("Clarvivo project ID");
 
@@ -72,6 +72,38 @@ export function createServer(): McpServer {
     },
     annotations: { readOnlyHint: true, idempotentHint: true },
   }, handlers.getPages);
+
+  server.registerTool("get_search_queries", {
+    title: "Get Search Console queries",
+    description: "Return the Google searches bringing people to the site, with clicks, impressions, CTR, and average position. Ranked by clicks then impressions, so high-impression queries that are close to ranking still surface. Spends Search Console quota on every call.",
+    inputSchema: {
+      projectId,
+      days: z.number().int().min(1).max(90).default(28).describe("Reporting window from 1 to 90 days"),
+      limit: z.number().int().min(1).max(100).default(20).describe("How many queries to return, 1 to 100"),
+    },
+    annotations: { readOnlyHint: true, idempotentHint: true },
+  }, handlers.getSearchQueries);
+
+  server.registerTool("get_search_pages", {
+    title: "Get Search Console pages",
+    description: "Return the pages earning Google Search impressions and clicks, with CTR and average position. Spends Search Console quota on every call.",
+    inputSchema: {
+      projectId,
+      days: z.number().int().min(1).max(90).default(28).describe("Reporting window from 1 to 90 days"),
+      limit: z.number().int().min(1).max(100).default(20).describe("How many pages to return, 1 to 100"),
+    },
+    annotations: { readOnlyHint: true, idempotentHint: true },
+  }, handlers.getSearchPages);
+
+  server.registerTool("get_search_trends", {
+    title: "Get Search Console trend",
+    description: "Return the daily Search Console series (clicks, impressions, CTR, average position) plus window totals. Reads Clarvivo's stored snapshots rather than Google, so it costs no Search Console quota and is the right tool for repeated checks.",
+    inputSchema: {
+      projectId,
+      days: z.number().int().min(7).max(90).default(28).describe("Reporting window from 7 to 90 days"),
+    },
+    annotations: { readOnlyHint: true, idempotentHint: true },
+  }, handlers.getSearchTrends);
 
   server.registerTool("get_audience", {
     title: "Get audience breakdown",

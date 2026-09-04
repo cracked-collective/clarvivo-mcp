@@ -60,6 +60,17 @@ function reportingDays(input: number | undefined, fallback = 30): number {
   return Math.max(1, Math.min(90, Math.round(input ?? fallback)));
 }
 
+/** How many Search Console rows come back before the answer drowns in long tail. */
+function searchLimit(input: number | undefined): number {
+  return Math.max(1, Math.min(100, Math.round(input ?? 20)));
+}
+
+// Google orders by clicks, but a page with heavy impressions and no clicks is exactly the
+// "close to ranking" signal worth surfacing, so ties break on impressions.
+function topSearchRows<T extends { clicks: number; impressions: number }>(rows: T[], limit: number): T[] {
+  return [...rows].sort((a, b) => b.clicks - a.clicks || b.impressions - a.impressions).slice(0, limit);
+}
+
 function exportPath(cwd: string, requested: string | undefined, projectId: number | string, extension: string): string {
   if (requested?.split(/[\\/]+/).includes("..")) {
     throw new Error("Export path cannot contain '..' traversal.");
@@ -347,6 +358,74 @@ export function createToolHandlers(context: ToolContext = {}) {
         const days = reportingDays(input.days);
         const rows = await resolveApi(context).getAnalytics(input.projectId, days);
         return success({ projectId: input.projectId, days, pages: aggregatePages(rows) });
+      } catch (error) {
+        return failure(error, env, "analytics-lockout");
+      }
+    },
+
+    getSearchQueries: async (input: { projectId: number | string; days?: number; limit?: number }): Promise<ToolResult> => {
+      try {
+        const days = reportingDays(input.days, 28);
+        const limit = searchLimit(input.limit);
+        const rows = await resolveApi(context).getSearchKeywords(input.projectId, days);
+        // Search Console returns up to 1000 query rows. Handing all of them to the model
+        // buries the answer, so cap the list and say how much was left out.
+        return success({
+          projectId: input.projectId,
+          days,
+          totalQueries: rows.length,
+          returned: Math.min(rows.length, limit),
+          queries: topSearchRows(rows, limit).map((row) => ({
+            query: row.keyword ?? "",
+            clicks: row.clicks,
+            impressions: row.impressions,
+            ctr: row.ctr,
+            position: row.position,
+          })),
+        });
+      } catch (error) {
+        return failure(error, env, "analytics-lockout");
+      }
+    },
+
+    getSearchPages: async (input: { projectId: number | string; days?: number; limit?: number }): Promise<ToolResult> => {
+      try {
+        const days = reportingDays(input.days, 28);
+        const limit = searchLimit(input.limit);
+        const rows = await resolveApi(context).getSearchPages(input.projectId, days);
+        return success({
+          projectId: input.projectId,
+          days,
+          totalPages: rows.length,
+          returned: Math.min(rows.length, limit),
+          pages: topSearchRows(rows, limit).map((row) => ({
+            page: row.page ?? "",
+            clicks: row.clicks,
+            impressions: row.impressions,
+            ctr: row.ctr,
+            position: row.position,
+          })),
+        });
+      } catch (error) {
+        return failure(error, env, "analytics-lockout");
+      }
+    },
+
+    getSearchTrends: async (input: { projectId: number | string; days?: number }): Promise<ToolResult> => {
+      try {
+        const days = reportingDays(input.days, 28);
+        const rows = await resolveApi(context).getSearchTrends(input.projectId, days);
+        const clicks = rows.reduce((total, row) => total + Number(row.clicks || 0), 0);
+        const impressions = rows.reduce((total, row) => total + Number(row.impressions || 0), 0);
+        // The daily series is the point, but the totals answer "is search growing?"
+        // without the model walking every row.
+        return success({
+          projectId: input.projectId,
+          days,
+          daysWithData: rows.length,
+          totals: { clicks, impressions, ctr: impressions > 0 ? Math.round((clicks / impressions) * 10000) / 100 : 0 },
+          series: rows,
+        });
       } catch (error) {
         return failure(error, env, "analytics-lockout");
       }
