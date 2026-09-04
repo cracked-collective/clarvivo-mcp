@@ -53,10 +53,20 @@ export interface ClarvivoAlert {
   [key: string]: unknown;
 }
 
+export interface RevenueSplit {
+  source: string;
+  total: number | string;
+  count: number | string;
+}
+
 export interface RevenueSummary {
   totalRevenue?: number | string;
   eventCount?: number | string;
   averageAmount?: number | string;
+  /** Revenue grouped by PAYMENT PROVIDER (stripe, dodo, custom...). */
+  bySource?: RevenueSplit[];
+  /** Revenue grouped by MARKETING attribution (utm_source), "Direct" when unmatched. */
+  byTrafficSource?: RevenueSplit[];
   [key: string]: unknown;
 }
 

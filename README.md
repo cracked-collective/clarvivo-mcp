@@ -23,6 +23,7 @@ The tracker observes `history.pushState`, `history.replaceState`, and `popstate`
 | `get_stats` | Return a small traffic and top-line revenue summary for 1–90 days, capped to the top five pages and referrers. |
 | `get_traffic_sources` | Aggregate up to 90 days into channel shares, the top ten referrers, and the top ten UTM source rows. |
 | `get_pages` | Return the top ten pages with visitors, entries, exits, bounce rate, and average time. |
+| `get_revenue_sources` | Return recorded revenue split by marketing source (utm_source) and by payment provider. Revenue with no campaign context is grouped as Direct, meaning unattributed. |
 | `get_search_queries` | Return the Google searches bringing people to the site, with clicks, impressions, CTR, and average position. Spends Search Console quota. |
 | `get_search_pages` | Return the pages earning Google Search impressions and clicks, with CTR and average position. Spends Search Console quota. |
 | `get_search_trends` | Return the daily Search Console series plus window totals, read from stored snapshots so it costs no Search Console quota. |
@@ -36,6 +37,17 @@ The tracker observes `history.pushState`, `history.replaceState`, and `popstate`
 | `list_funnels` | List funnels and their ordered steps. |
 
 `setup_analytics` supports Next.js App Router, Next.js Pages Router, Vite (React/Vue/Svelte), Create React App, Astro, SvelteKit, Nuxt, Remix / React Router v7, Gatsby, Docusaurus, and static HTML.
+
+## Revenue by source
+
+`get_revenue_sources` is the tool that answers "which campaigns made money". It splits
+recorded revenue two ways: by marketing source (`utm_source`) and, separately, by payment
+provider — those are different questions and conflating them is the usual mistake.
+
+Revenue whose payment carried no Clarvivo campaign context is grouped as **Direct**. That
+means unattributed, not "the visitor typed the URL in". `verify_revenue` reports what share
+of revenue is attributed at all; if that share is low, treat the split as a floor rather
+than a verdict.
 
 ## Search Console
 

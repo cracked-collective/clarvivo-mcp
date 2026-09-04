@@ -11,6 +11,7 @@ import {
   payToReadMessage,
   planLimitMessage,
   requireToken,
+  type RevenueSplit,
 } from "./api.js";
 import { aggregateAudience, aggregatePages, aggregateTrafficSources } from "./analytics.js";
 import {
@@ -360,6 +361,40 @@ export function createToolHandlers(context: ToolContext = {}) {
         return success({ projectId: input.projectId, days, pages: aggregatePages(rows) });
       } catch (error) {
         return failure(error, env, "analytics-lockout");
+      }
+    },
+
+    getRevenueSources: async (input: { projectId: number | string; limit?: number }): Promise<ToolResult> => {
+      try {
+        const limit = Math.max(1, Math.min(50, Math.round(input.limit ?? 10)));
+        const revenue = await resolveApi(context).getRevenue(input.projectId);
+        const split = (rows: RevenueSplit[] | undefined, key: "source" | "provider") =>
+          (rows ?? [])
+            .map((row) => ({ [key]: row.source, revenue: number(row.total), payments: number(row.count) }))
+            .sort((a, b) => (b.revenue as number) - (a.revenue as number))
+            .slice(0, limit);
+
+        const byTrafficSource = split(revenue.byTrafficSource, "source");
+        const direct = byTrafficSource.find((row) => row.source === "Direct");
+        return success({
+          projectId: input.projectId,
+          totals: {
+            revenue: number(revenue.totalRevenue),
+            payments: number(revenue.eventCount),
+            average: number(revenue.averageAmount),
+          },
+          // The answer to "which campaigns made money".
+          byTrafficSource,
+          // Which payment provider processed it — NOT a marketing source.
+          byPaymentProvider: split(revenue.bySource, "provider"),
+          // Without this an agent reads "Direct" as people typing the URL in, and
+          // recommends cutting the campaigns that actually earned the money.
+          note: direct
+            ? 'Direct means the payment carried no Clarvivo campaign context, not that the visitor arrived directly. Run verify_revenue to see how much revenue is attributed.'
+            : undefined,
+        });
+      } catch (error) {
+        return failure(error, env);
       }
     },
 

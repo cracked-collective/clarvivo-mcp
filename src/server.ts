@@ -73,6 +73,16 @@ export function createServer(): McpServer {
     annotations: { readOnlyHint: true, idempotentHint: true },
   }, handlers.getPages);
 
+  server.registerTool("get_revenue_sources", {
+    title: "Get revenue by source",
+    description: "Return recorded revenue split by MARKETING source (utm_source) and, separately, by payment provider. This is the tool that answers which campaigns and channels produced money. Revenue whose payment carried no Clarvivo campaign context is grouped as Direct — that means unattributed, not that the visitor arrived directly.",
+    inputSchema: {
+      projectId,
+      limit: z.number().int().min(1).max(50).default(10).describe("How many sources to return, 1 to 50"),
+    },
+    annotations: { readOnlyHint: true, idempotentHint: true },
+  }, handlers.getRevenueSources);
+
   server.registerTool("get_search_queries", {
     title: "Get Search Console queries",
     description: "Return the Google searches bringing people to the site, with clicks, impressions, CTR, and average position. Ranked by clicks then impressions, so high-impression queries that are close to ranking still surface. Spends Search Console quota on every call.",
