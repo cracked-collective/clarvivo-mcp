@@ -2,9 +2,15 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { createToolHandlers } from "./tools.js";
 import { frameworkInputValues } from "./frameworks.js";
+import { createRequire } from "node:module";
+
+// Read the version from package.json rather than repeating it. It was already a THIRD
+// copy alongside package.json and server.json, and it had drifted: 0.4.1 shipped to npm
+// announcing itself to every MCP client as 0.4.0.
+const { version } = createRequire(import.meta.url)("../package.json") as { version: string };
 
 export function createServer(): McpServer {
-  const server = new McpServer({ name: "clarvivo", version: "0.4.0" });
+  const server = new McpServer({ name: "clarvivo", version });
   const handlers = createToolHandlers();
   const projectId = z.union([z.number(), z.string()]).describe("Clarvivo project ID");
 
