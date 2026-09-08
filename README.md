@@ -4,7 +4,7 @@ Install Clarvivo analytics without leaving your coding agent. The server detects
 
 ## The 60-second flow
 
-1. Create an API token at [app.clarvivo.com/dashboard/settings?tab=api-tokens](https://app.clarvivo.com/dashboard/settings?tab=api-tokens).
+1. Sign in to Clarvivo. New users create an API token right on the dashboard page after signing in; paying users create one in **Settings → API tokens**.
 2. Add this MCP server to your coding client with `CLARVIVO_API_TOKEN` in its environment.
 3. Ask the agent: **“Set up Clarvivo analytics for `example.com`.”**
 4. The agent detects the framework, calls `setup_analytics`, makes the returned edit, and deploys through your normal workflow.
@@ -23,6 +23,10 @@ The tracker observes `history.pushState`, `history.replaceState`, and `popstate`
 | `get_stats` | Return a small traffic and top-line revenue summary for 1–90 days, capped to the top five pages and referrers. |
 | `get_traffic_sources` | Aggregate up to 90 days into channel shares, the top ten referrers, and the top ten UTM source rows. |
 | `get_pages` | Return the top ten pages with visitors, entries, exits, bounce rate, and average time. |
+| `get_revenue_sources` | Return recorded revenue split by marketing source (utm_source) and by payment provider. Revenue with no campaign context is grouped as Direct, meaning unattributed. |
+| `get_search_queries` | Return the Google searches bringing people to the site, with clicks, impressions, CTR, and average position. Spends Search Console quota. |
+| `get_search_pages` | Return the pages earning Google Search impressions and clicks, with CTR and average position. Spends Search Console quota. |
+| `get_search_trends` | Return the daily Search Console series plus window totals, read from stored snapshots so it costs no Search Console quota. |
 | `get_audience` | Summarise devices, browsers, operating systems, countries, visitor segments, screens, and languages. |
 | `export_data` | Write CSV/JSON locally, or create a self-contained printable HTML report for PDF; return metadata only. |
 | `connect_revenue` | Detect Stripe, Polar, Razorpay, Paddle, Lemon Squeezy, or Dodo; connect its webhook; and return the attribution edit. |
@@ -33,6 +37,28 @@ The tracker observes `history.pushState`, `history.replaceState`, and `popstate`
 | `list_funnels` | List funnels and their ordered steps. |
 
 `setup_analytics` supports Next.js App Router, Next.js Pages Router, Vite (React/Vue/Svelte), Create React App, Astro, SvelteKit, Nuxt, Remix / React Router v7, Gatsby, Docusaurus, and static HTML.
+
+## Revenue by source
+
+`get_revenue_sources` is the tool that answers "which campaigns made money". It splits
+recorded revenue two ways: by marketing source (`utm_source`) and, separately, by payment
+provider — those are different questions and conflating them is the usual mistake.
+
+Revenue whose payment carried no Clarvivo campaign context is grouped as **Direct**. That
+means unattributed, not "the visitor typed the URL in". `verify_revenue` reports what share
+of revenue is attributed at all; if that share is low, treat the split as a floor rather
+than a verdict.
+
+## Search Console
+
+`get_search_queries` and `get_search_pages` proxy Google's Search Analytics API, so each
+call spends the project's Search Console quota; both cap what they return and report the
+total they trimmed. `get_search_trends` reads Clarvivo's stored snapshots instead, costs
+no quota, and is the one to reach for on repeated checks.
+
+All three need a token carrying `search:read`, and the project must already have Search
+Console connected in Clarvivo — the MCP reads the data, it does not run the Google
+sign-in for you.
 
 ## Read your data
 
@@ -262,10 +288,10 @@ No submission happens automatically. Complete these after the package and public
 - [ ] **Official MCP Registry:** verify the `io.github.cracked-collective/clarvivo` namespace, publish the matching npm version first, then run `mcp-publisher login`, `mcp-publisher validate`, and `mcp-publisher publish` against the included `server.json`. The registry stores metadata, not the package. Follow the [official registry quickstart](https://modelcontextprotocol.io/registry/quickstart).
 - [ ] **Smithery:** authenticate with the Smithery CLI and publish a local MCP bundle (`.mcpb`) under the Clarvivo namespace, or publish a hosted URL if an HTTP transport is added later: `smithery mcp publish <bundle.mcpb> -n clarvivo/clarvivo`. Smithery’s current publisher accepts hosted URLs or MCP bundles; see [Smithery CLI publishing](https://www.npmjs.com/package/@smithery/cli).
 - [ ] **mcp.so:** use the [server submission form](https://mcp.so/submit?type=server). It currently requires a public repository URL and name; the paid path is optional and advertises immediate publishing.
-- [ ] **PulseMCP:** use the site’s **Submit** flow and provide the public repository, npm install command, fifteen-tool inventory, auth variable, license, and maintainer contact. Re-check the form at submission time because PulseMCP does not publish a stable submission schema.
-- [ ] **Glama:** click **Add Server** in the [Glama registry](https://glama.ai/mcp/servers), submit the public GitHub repository, and add `glama.json` if organization ownership/metadata verification requests it. Confirm Glama can inspect all fifteen tools.
+- [ ] **PulseMCP:** use the site’s **Submit** flow and provide the public repository, npm install command, nineteen-tool inventory, auth variable, license, and maintainer contact. Re-check the form at submission time because PulseMCP does not publish a stable submission schema.
+- [ ] **Glama:** click **Add Server** in the [Glama registry](https://glama.ai/mcp/servers), submit the public GitHub repository, and add `glama.json` if organization ownership/metadata verification requests it. Confirm Glama can inspect all nineteen tools.
 - [ ] **Cursor Marketplace:** package the MCP config as an Agent Plugin or Cursor Plugin with a valid `plugin.json` / `.cursor-plugin/plugin.json`, public Git repository, README, and optional committed logo; declare the token variable in the manifest schema, then submit the repository at [cursor.com/marketplace/publish](https://cursor.com/marketplace/publish). Use the [official submission checklist](https://cursor.com/docs/reference/plugins).
 - [ ] **awesome-mcp-servers:** first ensure the Glama listing exists, then fork [punkpeye/awesome-mcp-servers](https://github.com/punkpeye/awesome-mcp-servers), add one alphabetized line in the appropriate category with repository link and concise description, and open a PR following its [contribution guide](https://github.com/punkpeye/awesome-mcp-servers/blob/main/CONTRIBUTING.md).
 - [ ] **Additional discovery:** submit the same canonical metadata to `mcpservers.org`, `MCP Central`, and `mcp-marketplace.io`; keep every listing pointed at the npm package and one canonical repository so versions and security notices do not drift.
 
-For every listing, use the same name, description, repository, license, token variable, Node requirement, fifteen-tool inventory, and install snippets from this README.
+For every listing, use the same name, description, repository, license, token variable, Node requirement, nineteen-tool inventory, and install snippets from this README.

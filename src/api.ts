@@ -53,10 +53,20 @@ export interface ClarvivoAlert {
   [key: string]: unknown;
 }
 
+export interface RevenueSplit {
+  source: string;
+  total: number | string;
+  count: number | string;
+}
+
 export interface RevenueSummary {
   totalRevenue?: number | string;
   eventCount?: number | string;
   averageAmount?: number | string;
+  /** Revenue grouped by PAYMENT PROVIDER (stripe, dodo, custom...). */
+  bySource?: RevenueSplit[];
+  /** Revenue grouped by MARKETING attribution (utm_source), "Direct" when unmatched. */
+  byTrafficSource?: RevenueSplit[];
   [key: string]: unknown;
 }
 
@@ -74,6 +84,23 @@ export interface RevenueStatus {
   lastEventAt: string | null;
   lastSource: string | null;
   attributedShare: number | null;
+}
+
+export interface SearchRow {
+  keyword?: string;
+  page?: string;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  position: number;
+}
+
+export interface SearchTrendRow {
+  date: string;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  position: number | null;
 }
 
 export interface InstallStatus {
@@ -94,6 +121,9 @@ export interface ClarvivoApi {
   getRevenue(projectId: number | string): Promise<RevenueSummary>;
   connectRevenue(projectId: number | string, provider: string): Promise<RevenueConnection>;
   getRevenueStatus(projectId: number | string): Promise<RevenueStatus>;
+  getSearchKeywords(projectId: number | string, days: number): Promise<SearchRow[]>;
+  getSearchPages(projectId: number | string, days: number): Promise<SearchRow[]>;
+  getSearchTrends(projectId: number | string, days: number): Promise<SearchTrendRow[]>;
   createEvent(projectId: number | string, input: { name: string; type: string; url?: string; value?: number }): Promise<Record<string, unknown>>;
   listFunnels(projectId: number | string): Promise<ClarvivoFunnel[]>;
   createFunnel(projectId: number | string, input: { name: string; steps: FunnelStep[] }): Promise<ClarvivoFunnel>;
@@ -236,6 +266,23 @@ export class HttpClarvivoApi implements ClarvivoApi {
     return this.request<RevenueStatus>(`/api/projects/${encodeURIComponent(String(projectId))}/revenue-status`);
   }
 
+  // keywords and pages proxy Google's Search Analytics API on every call, so each one
+  // spends the project's Search Console quota. getSearchTrends reads Clarvivo's own
+  // gsc_snapshots table, costs no quota, and is the right one for repeated checks.
+  getSearchKeywords(projectId: number | string, days: number): Promise<SearchRow[]> {
+    const { startDate, endDate } = searchWindow(days);
+    return this.request<SearchRow[]>(`/api/projects/${encodeURIComponent(String(projectId))}/gsc/keywords?startDate=${startDate}&endDate=${endDate}`);
+  }
+
+  getSearchPages(projectId: number | string, days: number): Promise<SearchRow[]> {
+    const { startDate, endDate } = searchWindow(days);
+    return this.request<SearchRow[]>(`/api/projects/${encodeURIComponent(String(projectId))}/gsc/pages?startDate=${startDate}&endDate=${endDate}`);
+  }
+
+  getSearchTrends(projectId: number | string, days: number): Promise<SearchTrendRow[]> {
+    return this.request<SearchTrendRow[]>(`/api/projects/${encodeURIComponent(String(projectId))}/gsc/trends?days=${days}`);
+  }
+
   createEvent(projectId: number | string, input: { name: string; type: string; url?: string; value?: number }): Promise<Record<string, unknown>> {
     return this.request<Record<string, unknown>>(`/api/projects/${encodeURIComponent(String(projectId))}/events`, {
       method: "POST",
@@ -277,4 +324,12 @@ export function isPlanLimit(error: unknown): boolean {
 
 export function isAnalyticsLockout(error: unknown): boolean {
   return error instanceof ClarvivoApiError && error.status === 402;
+}
+
+/** Search Console needs an explicit date range; the dashboard defaults to 28 days. */
+function searchWindow(days: number): { startDate: string; endDate: string } {
+  const end = new Date();
+  const start = new Date(end);
+  start.setUTCDate(start.getUTCDate() - Math.max(1, days) + 1);
+  return { startDate: start.toISOString().slice(0, 10), endDate: end.toISOString().slice(0, 10) };
 }
