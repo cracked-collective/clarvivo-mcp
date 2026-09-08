@@ -44,7 +44,9 @@ function success(data: Record<string, unknown>): ToolSuccess {
 
 function failure(error: unknown, env: NodeJS.ProcessEnv, mode?: "project-limit" | "analytics-lockout" | "export"): ToolFailure {
   const message = error instanceof ClarvivoApiError && error.code === "TOKEN_SCOPE_REQUIRED"
-    ? `This tool needs the ${error.scope || "required"} scope. Open ${(env.CLARVIVO_BASE_URL || "https://app.clarvivo.com").replace(/\/$/, "")}/dashboard/settings?tab=api-tokens, add ${error.scope || "that scope"} to this API token (or create a token with it), then restart the MCP client and retry.`
+    // A token's scopes are fixed at creation — the server has no edit route, only create
+    // and revoke — so "add the scope to this token" was advice nobody could follow.
+    ? `This tool needs the ${error.scope || "required"} scope, and a token's scopes cannot be changed after it is created. Open ${(env.CLARVIVO_BASE_URL || "https://app.clarvivo.com").replace(/\/$/, "")}/dashboard/account?section=settings&tab=api-tokens, create a NEW token that includes ${error.scope || "that scope"} (keep the ones you already rely on), put it in CLARVIVO_API_TOKEN, then restart the MCP client and retry.`
     : mode === "export" && error instanceof ClarvivoApiError && error.status === 403
       ? exportPlanMessage(env.CLARVIVO_BASE_URL)
     : mode === "export" && isAnalyticsLockout(error)
@@ -325,19 +327,26 @@ export function createToolHandlers(context: ToolContext = {}) {
       try {
         const api = resolveApi(context);
         const days = Math.max(1, Math.min(90, Math.round(input.days ?? 7)));
+        // Traffic is what this tool promises; revenue is a bonus block. Promise.all made
+        // the bonus mandatory, so a token without revenue:read failed the WHOLE call and
+        // returned no traffic at all. That is the default path: neither the dashboard's
+        // preselected scopes nor CODING_AGENT_TOKEN_SCOPES include revenue:read, so
+        // get_stats was unusable for most agent tokens. Revenue now degrades to a note.
         const [rows, realtime, revenue] = await Promise.all([
           api.getAnalytics(input.projectId, days),
           api.getRealtime(input.projectId),
-          api.getRevenue(input.projectId),
+          api.getRevenue(input.projectId).catch(() => null),
         ]);
         return success({
           projectId: input.projectId,
           ...summarizeStats(rows, number(realtime.count), days),
-          revenue: {
-            total: number(revenue.totalRevenue),
-            events: number(revenue.eventCount),
-            average: number(revenue.averageAmount),
-          },
+          revenue: revenue
+            ? {
+                total: number(revenue.totalRevenue),
+                events: number(revenue.eventCount),
+                average: number(revenue.averageAmount),
+              }
+            : { unavailable: "Revenue was not read. Grant this token the revenue:read scope to include it; traffic above is unaffected." },
         });
       } catch (error) {
         return failure(error, env, "analytics-lockout");

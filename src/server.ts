@@ -1,6 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { createToolHandlers } from "./tools.js";
+import { frameworkInputValues } from "./frameworks.js";
 
 export function createServer(): McpServer {
   const server = new McpServer({ name: "clarvivo", version: "0.4.0" });
@@ -13,7 +14,7 @@ export function createServer(): McpServer {
     inputSchema: {
       name: z.string().min(1).optional().describe("Project name; defaults to a readable name derived from domain"),
       domain: z.string().min(1).describe("Production hostname, for example example.com"),
-      framework: z.string().min(1).optional().describe("Optional override such as next-app, next-pages, vite, astro, sveltekit, nuxt, remix, gatsby, docusaurus, or static-html"),
+      framework: z.enum(frameworkInputValues).optional().describe("Optional override. Omit to auto-detect from the repository. Next.js needs the router named explicitly: next-app or next-pages."),
     },
     annotations: { idempotentHint: true },
   }, handlers.setupAnalytics);
@@ -24,7 +25,7 @@ export function createServer(): McpServer {
     inputSchema: {
       apiKey: z.string().min(1).optional().describe("Public Clarvivo tracking API key"),
       projectId: projectId.optional(),
-      framework: z.string().min(1).describe("Target framework"),
+      framework: z.enum(frameworkInputValues).describe("Target framework. Next.js needs the router named explicitly: next-app or next-pages."),
     },
     annotations: { readOnlyHint: true, idempotentHint: true },
   }, handlers.getInstallSnippet);

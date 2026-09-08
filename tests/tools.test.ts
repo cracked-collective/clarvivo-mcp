@@ -94,7 +94,10 @@ describe("tool error UX", () => {
     const result = await createToolHandlers({ env: { CLARVIVO_API_TOKEN: "secret" }, api }).listFunnels({ projectId: 1 });
     expect(result).toMatchObject({ isError: true });
     expect(result.content[0].text).toContain("funnels:read");
-    expect(result.content[0].text).toContain("/dashboard/settings?tab=api-tokens");
+    expect(result.content[0].text).toContain("/dashboard/account?section=settings&tab=api-tokens");
+    // Scopes are fixed at creation (the server exposes create and revoke, no edit), so the
+    // guidance must send someone to make a NEW token rather than to amend this one.
+    expect(result.content[0].text).toContain("create a NEW token");
     expect(result.content[0].text).not.toContain("secret");
   });
 });
@@ -270,5 +273,42 @@ describe("create_funnel", () => {
     }).createFunnel({ projectId: 1, name: " signup ", steps: [{ name: "Other", url: "/other" }] });
     expect(createFunnel).not.toHaveBeenCalled();
     expect(result).toMatchObject({ structuredContent: { reusedExistingFunnel: true, funnel: existing } });
+  });
+});
+
+describe("get_stats survives a token without revenue:read", () => {
+  // Revenue is a bonus block on a tool that promises TRAFFIC. It used to sit in the same
+  // Promise.all as the analytics reads, so a missing optional scope failed the whole call
+  // and returned no traffic at all — and that was the default path, because neither the
+  // dashboard's preselected scopes nor CODING_AGENT_TOKEN_SCOPES include revenue:read.
+  const scopeDenied = () =>
+    Object.assign(new ClarvivoApiError("Forbidden", 403), { code: "TOKEN_SCOPE_REQUIRED", scope: "revenue:read" });
+
+  it("still returns traffic, and says why revenue is missing", async () => {
+    const handlers = createToolHandlers({
+      env: { CLARVIVO_API_TOKEN: "clv_live_x" },
+      cwd: process.cwd(),
+      api: mockApi({ getRevenue: vi.fn().mockRejectedValue(scopeDenied()) }),
+    });
+
+    const result = await handlers.getStats({ projectId: 1, days: 7 });
+
+    expect(result.isError).not.toBe(true);
+    const payload = JSON.parse(result.content[0].text);
+    expect(payload.projectId).toBe(1);
+    expect(payload).toHaveProperty("pageviews");
+    expect(payload.revenue.unavailable).toContain("revenue:read");
+  });
+
+  it("still reports revenue when the scope is granted", async () => {
+    const handlers = createToolHandlers({
+      env: { CLARVIVO_API_TOKEN: "clv_live_x" },
+      cwd: process.cwd(),
+      api: mockApi({ getRevenue: vi.fn().mockResolvedValue({ totalRevenue: 42, eventCount: 3, averageAmount: 14 }) }),
+    });
+
+    const payload = JSON.parse((await handlers.getStats({ projectId: 1, days: 7 })).content[0].text);
+    expect(payload.revenue).toMatchObject({ total: 42, events: 3, average: 14 });
+    expect(payload.revenue.unavailable).toBeUndefined();
   });
 });

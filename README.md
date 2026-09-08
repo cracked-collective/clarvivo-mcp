@@ -66,6 +66,10 @@ Ask for a quick overview with `get_stats`, then use `get_traffic_sources`, `get_
 
 Analytics reads require the `analytics:read` token scope. If the account is still awaiting its first payment or its access has lapsed, the tools stop at the same billing wall as the dashboard and link to the billing page.
 
+`get_stats` also reports revenue when the token carries `revenue:read`. Without that scope it still returns the full traffic summary and says why the revenue block is missing, rather than failing the whole call for an optional extra.
+
+**Grant every scope you intend to use when you create the token.** A token's scopes are fixed at creation — they cannot be edited afterwards, only revoked and replaced — so a missing scope means minting a new token, updating `CLARVIVO_API_TOKEN`, and restarting the MCP client. The tools span `projects:read`, `projects:write`, `analytics:read`, `revenue:read`, `revenue:write`, `funnels:read`, `funnels:write`, `events:write`, `alerts:write` and `search:read`.
+
 ## Export
 
 `export_data` writes the result to disk instead of returning file contents. CSV and JSON use Clarvivo's paid export routes; `pdf` creates a slim, self-contained `.html` report with headline metrics, channels, top pages, and sources. Open that file in a browser and use **Print → Save as PDF**, matching the dashboard workflow.

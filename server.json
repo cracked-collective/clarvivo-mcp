@@ -3,15 +3,15 @@
   "name": "io.github.cracked-collective/clarvivo",
   "description": "Install Clarvivo analytics, connect payments, and manage events, funnels, and alerts.",
   "repository": {
-    "url": "https://github.com/cracked-collective/clarvivo-vercel",
+    "url": "https://github.com/cracked-collective/clarvivo-mcp",
     "source": "github"
   },
-  "version": "0.4.0",
+  "version": "0.4.1",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@clarvivo/mcp",
-      "version": "0.4.0",
+      "version": "0.4.1",
       "transport": { "type": "stdio" },
       "environmentVariables": [
         {

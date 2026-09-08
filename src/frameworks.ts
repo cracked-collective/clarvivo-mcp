@@ -78,6 +78,21 @@ const aliases: Record<string, FrameworkId> = {
   "static-html": "static-html",
 };
 
+/**
+ * Every value normalizeFramework() accepts — canonical ids plus aliases.
+ *
+ * The tool schema advertises these as an enum rather than describing them in prose. A
+ * bare `z.string()` let a client send the most natural guess ("nextjs"), which only
+ * failed at runtime and cost a round trip; the schema now makes the wrong value
+ * unrepresentable, and editors can autocomplete it. Deliberately derived from `aliases`
+ * so a new framework cannot be added without appearing here.
+ *
+ * Note there is intentionally no bare "nextjs"/"next": Next.js App Router and Pages
+ * Router need different files, so a single alias would have to guess, and guessing wrong
+ * writes the snippet into a file that never renders.
+ */
+export const frameworkInputValues = Object.keys(aliases).sort() as [string, ...string[]];
+
 export function normalizeFramework(value: string): FrameworkId {
   const normalized = value.trim().toLowerCase().replace(/[_\s]+/g, "-");
   const framework = aliases[normalized];
